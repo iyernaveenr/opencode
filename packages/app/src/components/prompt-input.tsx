@@ -1755,6 +1755,35 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   </Show>
                   {props.toolbar}
                   <ComposerModelControl state={modelControlState()} />
+                  <TooltipV2
+                    placement="top"
+                    gutter={4}
+                    value={
+                      accepting()
+                        ? language.t("command.permissions.autoaccept.disable")
+                        : language.t("command.permissions.autoaccept.enable")
+                    }
+                  >
+                    <ButtonV2
+                      data-action="prompt-autoaccept"
+                      variant="ghost-muted"
+                      size="normal"
+                      class="![font-weight:440]"
+                      style={control()}
+                      onClick={() => {
+                        const id = props.controls.session.id
+                        if (id) permission.toggleAutoAccept(id, sdk().directory)
+                        else permission.toggleAutoAcceptDirectory(sdk().directory)
+                      }}
+                    >
+                      <span class="-ml-0.5 flex shrink-0">
+                        <Icon name="circle-check" size="small" />
+                      </span>
+                      <span class="truncate leading-5">
+                        {accepting() ? "Auto-accept: on" : "Auto-accept: off"}
+                      </span>
+                    </ButtonV2>
+                  </TooltipV2>
                   <Show when={!providersLoading() && store.mode !== "shell" && showVariantControl()}>
                     <div
                       data-component="prompt-variant-control"
