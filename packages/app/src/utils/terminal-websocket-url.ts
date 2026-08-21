@@ -11,6 +11,7 @@ export function terminalWebSocketURL(input: {
   username?: string
   password?: string
   authToken?: boolean
+  sessionID?: string
 }) {
   const isV1 = input.protocol === "v1"
   const next = new URL(`${input.url}${isV1 ? `/pty/${input.id}/connect` : `/api/pty/${input.id}/connect`}`)
@@ -20,6 +21,7 @@ export function terminalWebSocketURL(input: {
     next.searchParams.set("location[directory]", input.directory)
   }
   next.searchParams.set("cursor", String(input.cursor))
+  if (input.sessionID) next.searchParams.set("sessionID", input.sessionID)
   next.protocol = next.protocol === "https:" ? "wss:" : "ws:"
   if (input.ticket) {
     next.searchParams.set("ticket", input.ticket)
