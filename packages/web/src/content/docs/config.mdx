@@ -341,6 +341,26 @@ If not specified, OpenCode will automatically discover and use a sensible defaul
 
 ---
 
+### Terminal context
+
+You can let the model see commands you run in a chat session's integrated terminal through the `terminal_context` option.
+
+```json title="opencode.json"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "terminal_context": "ambient"
+}
+```
+
+- `off` - default. Nothing is captured or exposed; matches previous behavior.
+- `tool-only` - commands are captured in memory and the model can fetch them on demand with the `terminal` tool.
+- `ambient` - additionally injects a small block with recent command lines and exit codes into each request, so the model knows a command failed without being told. Command lines are sent to your model provider on every turn.
+- `ambient-full` - additionally attaches the bounded output of commands that failed since your last message. Output bodies of failed commands are sent to your model provider.
+
+Capture uses bash shell integration (OSC 133 markers), is kept in memory only, bounded per command, and strictly scoped to the owning chat session - one chat can never see another chat's terminals. Interactive password prompts and unsubmitted keystrokes are not captured.
+
+---
+
 ### Tools
 
 You can manage the tools an LLM can use through the `tools` option.
