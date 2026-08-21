@@ -2,6 +2,27 @@ import { describe, expect, test } from "bun:test"
 import { terminalWebSocketURL } from "./terminal-websocket-url"
 
 describe("terminalWebSocketURL", () => {
+  test("carries the owning session claim and omits it when absent", () => {
+    const owned = terminalWebSocketURL({
+      url: "http://127.0.0.1:49365",
+      id: "pty_test",
+      directory: "/tmp/project",
+      cursor: 0,
+      ticket: "t",
+      sessionID: "ses_owner",
+    })
+    expect(owned.searchParams.get("sessionID")).toBe("ses_owner")
+
+    const unowned = terminalWebSocketURL({
+      url: "http://127.0.0.1:49365",
+      id: "pty_test",
+      directory: "/tmp/project",
+      cursor: 0,
+      ticket: "t",
+    })
+    expect(unowned.searchParams.has("sessionID")).toBe(false)
+  })
+
   test("uses the current ticketed PTY route", () => {
     const url = terminalWebSocketURL({
       url: "http://127.0.0.1:49365",

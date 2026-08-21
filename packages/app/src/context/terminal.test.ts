@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, mock, test } from "bun:test"
 import { ServerScope } from "@/utils/server-scope"
 
 let getWorkspaceTerminalCacheKey: typeof import("./terminal").getWorkspaceTerminalCacheKey
+let getSessionTerminalCacheKey: typeof import("./terminal").getSessionTerminalCacheKey
 let getLegacyTerminalStorageKeys: (dir: string, legacySessionID?: string) => string[]
 let migrateTerminalState: (value: unknown) => unknown
 
@@ -20,6 +21,7 @@ beforeAll(async () => {
   }))
   const mod = await import("./terminal")
   getWorkspaceTerminalCacheKey = mod.getWorkspaceTerminalCacheKey
+  getSessionTerminalCacheKey = mod.getSessionTerminalCacheKey
   getLegacyTerminalStorageKeys = mod.getLegacyTerminalStorageKeys
   migrateTerminalState = mod.migrateTerminalState
 })
@@ -32,6 +34,25 @@ describe("getWorkspaceTerminalCacheKey", () => {
   test("can include a server scope", () => {
     expect(String(getWorkspaceTerminalCacheKey("/repo", "ssh:debian" as ServerScope))).toBe(
       "ssh:debian\u0000/repo\u0000__workspace__",
+    )
+  })
+})
+
+describe("getSessionTerminalCacheKey", () => {
+  test("keys terminals by owning chat session", () => {
+    expect(String(getSessionTerminalCacheKey("/repo", "ses_a"))).toBe("local\u0000/repo\u0000session:ses_a")
+  })
+
+  test("distinct sessions in the same workspace get distinct keys", () => {
+    const a = String(getSessionTerminalCacheKey("/repo", "ses_a"))
+    const b = String(getSessionTerminalCacheKey("/repo", "ses_b"))
+    expect(a).not.toBe(b)
+    expect(a).not.toBe(String(getWorkspaceTerminalCacheKey("/repo")))
+  })
+
+  test("can include a server scope", () => {
+    expect(String(getSessionTerminalCacheKey("/repo", "ses_a", "ssh:debian" as ServerScope))).toBe(
+      "ssh:debian\u0000/repo\u0000session:ses_a",
     )
   })
 })

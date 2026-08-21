@@ -6,6 +6,7 @@ import type { HexColor, ResolvedV2Theme } from "@opencode-ai/ui/theme/types"
 import { showToast } from "@/utils/toast"
 import type { FitAddon, Ghostty, Terminal as Term } from "ghostty-web"
 import { type ComponentProps, createEffect, createMemo, onCleanup, onMount, splitProps } from "solid-js"
+import { useParams } from "@solidjs/router"
 import { SerializeAddon } from "@/addons/serialize"
 import { matchKeybind, parseKeybind } from "@/context/command"
 import { useLanguage } from "@/context/language"
@@ -13,7 +14,7 @@ import { usePlatform } from "@/context/platform"
 import { useSDK } from "@/context/sdk"
 import { useServerSDK } from "@/context/server-sdk"
 import { terminalFontFamily, useSettings } from "@/context/settings"
-import type { LocalPTY } from "@/context/terminal"
+import { SESSION_SCOPED_TERMINALS, type LocalPTY } from "@/context/terminal"
 import { disposeIfDisposable, getHoveredLinkText, setOptionIfSupported } from "@/utils/runtime-adapters"
 import { terminalWriter } from "@/utils/terminal-writer"
 import { terminalWebSocketURL } from "@/utils/terminal-websocket-url"
@@ -175,6 +176,9 @@ export const Terminal = (props: TerminalProps) => {
   const settings = useSettings()
   const theme = useTheme()
   const language = useLanguage()
+  // Session route param; owned terminals must present their session claim on every PTY request.
+  const routeParams = useParams()
+  const ownerSessionID = SESSION_SCOPED_TERMINALS ? routeParams.id : undefined
   // Terminal captures its connection for the PTY lifetime, so callers must key it per server/session.
   const connection = useServerSDK()().server
   const directory = sdk().directory
@@ -539,7 +543,7 @@ export const Terminal = (props: TerminalProps) => {
       const gone = async () => {
         if ((await sdk().protocol) === "v1") {
           return sdk()
-            .client.pty.get({ ptyID: id }, { throwOnError: false })
+            .client.pty.get({ ptyID: id, sessionID: ownerSessionID }, { throwOnError: false })
             .then((result) => result.response.status === 404)
             .catch((err) => {
               debugTerminal("failed to inspect terminal session", err)
@@ -560,7 +564,7 @@ export const Terminal = (props: TerminalProps) => {
         if ((await sdk().protocol) === "v1") {
           const result = await sdk()
             .client.pty.connectToken(
-              { ptyID: id, directory },
+              { ptyID: id, directory, sessionID: ownerSessionID },
               {
                 throwOnError: false,
                 headers: { "x-opencode-ticket": "1" },
@@ -629,6 +633,7 @@ export const Terminal = (props: TerminalProps) => {
             username,
             password,
             authToken,
+            sessionID: ownerSessionID,
           }),
         )
         socket.binaryType = "arraybuffer"
