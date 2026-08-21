@@ -30,7 +30,7 @@ export function TerminalPanel() {
   const language = useLanguage()
   const command = useCommand()
   const settings = useSettings()
-  const { workspaceKey, view } = useSessionLayout()
+  const { workspaceKey, sessionKey, view } = useSessionLayout()
 
   const opened = createMemo(() => view().terminal.opened())
   const size = createSizing()
@@ -74,9 +74,16 @@ export function TerminalPanel() {
 
   createEffect(
     on(
-      () => terminal.all().length,
-      (count, prevCount) => {
-        if (prevCount === undefined || prevCount <= 0 || count !== 0) return
+      () => [sessionKey(), terminal.all().length] as const,
+      ([key, count], prev) => {
+        if (prev === undefined) return
+        const [prevKey, prevCount] = prev
+        // Session-scoped stores swap with the tab; a count change across tabs is not a close.
+        if (key !== prevKey) {
+          setStore("autoCreated", false)
+          return
+        }
+        if (prevCount <= 0 || count !== 0) return
         if (!opened()) return
         close()
       },
