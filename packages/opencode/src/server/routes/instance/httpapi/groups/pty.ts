@@ -1,6 +1,7 @@
 import { Pty } from "@opencode-ai/core/pty"
 import { PtyTicket } from "@opencode-ai/core/pty/ticket"
 import { PtyID } from "@opencode-ai/core/pty/schema"
+import { SessionID } from "@opencode-ai/schema/session-id"
 import { PTY_CONNECT_TICKET_QUERY } from "@/server/shared/pty-ticket"
 import { Schema } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiError, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
@@ -16,9 +17,15 @@ import { described } from "./metadata"
 
 const root = "/pty"
 export const Params = Schema.Struct({ ptyID: PtyID })
+// Session-ownership claim; enforced against Pty.Info.sessionID when both are present.
+export const SessionQuery = Schema.Struct({
+  ...WorkspaceRoutingQueryFields,
+  sessionID: Schema.optional(SessionID),
+})
 export const CursorQuery = Schema.Struct({
   ...WorkspaceRoutingQueryFields,
   cursor: Schema.optional(Schema.String),
+  sessionID: Schema.optional(SessionID),
 })
 export const ShellItem = Schema.Struct({
   path: Schema.String,
@@ -52,7 +59,7 @@ export const PtyApi = HttpApi.make("pty")
           }),
         ),
         HttpApiEndpoint.get("list", PtyPaths.list, {
-          query: WorkspaceRoutingQuery,
+          query: SessionQuery,
           success: described(Schema.Array(Pty.Info), "List of sessions"),
         }).annotateMerge(
           OpenApi.annotations({
@@ -75,7 +82,7 @@ export const PtyApi = HttpApi.make("pty")
         ),
         HttpApiEndpoint.get("get", PtyPaths.get, {
           params: { ptyID: PtyID },
-          query: WorkspaceRoutingQuery,
+          query: SessionQuery,
           success: described(Pty.Info, "Session info"),
           error: PtyNotFoundError,
         }).annotateMerge(
@@ -87,7 +94,7 @@ export const PtyApi = HttpApi.make("pty")
         ),
         HttpApiEndpoint.put("update", PtyPaths.update, {
           params: { ptyID: PtyID },
-          query: WorkspaceRoutingQuery,
+          query: SessionQuery,
           payload: Pty.UpdateInput,
           success: described(Pty.Info, "Updated session"),
           error: [PtyNotFoundError, HttpApiError.BadRequest],
@@ -100,7 +107,7 @@ export const PtyApi = HttpApi.make("pty")
         ),
         HttpApiEndpoint.delete("remove", PtyPaths.remove, {
           params: { ptyID: PtyID },
-          query: WorkspaceRoutingQuery,
+          query: SessionQuery,
           success: described(Schema.Boolean, "Session removed"),
           error: PtyNotFoundError,
         }).annotateMerge(
@@ -112,7 +119,7 @@ export const PtyApi = HttpApi.make("pty")
         ),
         HttpApiEndpoint.post("connectToken", PtyPaths.connectToken, {
           params: { ptyID: PtyID },
-          query: WorkspaceRoutingQuery,
+          query: SessionQuery,
           success: described(PtyTicket.ConnectToken, "WebSocket connect token"),
           error: [PtyForbiddenError, PtyNotFoundError],
         }).annotateMerge(
@@ -155,7 +162,7 @@ export const PtyConnectApi = HttpApi.make("pty-connect").add(
             ...operation,
             parameters: [
               ...(operation.parameters ?? []),
-              ...["directory", "workspace", "cursor", PTY_CONNECT_TICKET_QUERY].map((name) => ({
+              ...["directory", "workspace", "cursor", "sessionID", PTY_CONNECT_TICKET_QUERY].map((name) => ({
                 in: "query",
                 name,
                 schema: { type: "string" },

@@ -34,6 +34,10 @@ export const Info = Schema.Struct({
     description: "JSON schema reference for configuration validation",
   }),
   shell: Schema.optional(Schema.String).annotate({ description: "Default shell to use for terminal and bash tool" }),
+  terminal_context: Schema.optional(Schema.Literals(["off", "tool-only", "ambient", "ambient-full"])).annotate({
+    description:
+      "How GUI terminal activity reaches the model: 'off' (default) exposes nothing, 'tool-only' allows fetching via the terminal tool, 'ambient' additionally injects bounded command/exit-code metadata each turn, 'ambient-full' also auto-attaches bounded output of failed commands",
+  }),
   logLevel: Schema.optional(LogLevelRef).annotate({ description: "Log level" }),
   server: Schema.optional(ConfigServerV1.Server).annotate({
     description: "Server configuration for opencode serve and web commands",
