@@ -51,6 +51,7 @@ const featureDefinitions = Event.inventory(
   ...ProjectDirectories.Event.Definitions,
   ...FileSystemWatcher.Event.Definitions,
   ...Pty.Event.Definitions,
+  ...Pty.CommandEvent.Definitions,
   ...Question.Event.Definitions,
 )
 

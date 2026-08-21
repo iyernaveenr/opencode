@@ -7,6 +7,9 @@ import { Pty } from "@opencode-ai/schema/pty"
 import { Config } from "./config"
 import { EventV2 } from "./event"
 import { Location } from "./location"
+import { PtyCapture } from "./pty/capture"
+import { PtyIntegration } from "./pty/integration"
+import { PtyOsc } from "./pty/osc"
 import { PtyID } from "./pty/schema"
 import { Shell } from "./shell"
 import { lazy } from "./util/lazy"
@@ -78,7 +81,7 @@ export class ExitedError extends Schema.TaggedErrorClass<ExitedError>()("Pty.Exi
 }) {}
 
 export interface Interface {
-  readonly list: () => Effect.Effect<Info[]>
+  readonly list: (filter?: { readonly sessionID?: string }) => Effect.Effect<Info[]>
   readonly get: (id: PtyID) => Effect.Effect<Info, NotFoundError>
   readonly create: (input: CreateInput) => Effect.Effect<Info>
   readonly update: (id: PtyID, input: UpdateInput) => Effect.Effect<Info, NotFoundError>
@@ -95,6 +98,7 @@ const layer = Layer.effect(
     const events = yield* EventV2.Service
     const location = yield* Location.Service
     const config = yield* Config.Service
+    const capture = yield* PtyCapture.Service
     const context = yield* Effect.context()
     const runFork = Effect.runForkWith(context)
     const sessions = new Map<PtyID, Active>()
@@ -154,8 +158,10 @@ const layer = Layer.effect(
       yield* removeSession(id)
     })
 
-    const list = Effect.fn("Pty.list")(function* () {
-      return Array.from(sessions.values()).map((session) => session.info)
+    const list = Effect.fn("Pty.list")(function* (filter?: { readonly sessionID?: string }) {
+      const all = Array.from(sessions.values()).map((session) => session.info)
+      if (filter?.sessionID === undefined) return all
+      return all.filter((info) => info.sessionID === filter.sessionID)
     })
 
     const get = Effect.fn("Pty.get")(function* (id: PtyID) {
@@ -165,11 +171,15 @@ const layer = Layer.effect(
     const create = Effect.fn("Pty.create")(function* (input: CreateInput) {
       const id = PtyID.ascending()
       const command = input.command || Shell.preferred(Config.latest(yield* config.entries(), "shell"))
-      const args = Shell.login(command) ? [...(input.args ?? []), "-l"] : [...(input.args ?? [])]
+      const baseArgs = Shell.login(command) ? [...(input.args ?? []), "-l"] : [...(input.args ?? [])]
+      // Integration failure (e.g. tmpdir not writable) degrades to an untouched spawn.
+      const integration = yield* Effect.promise(() => PtyIntegration.setup(command, baseArgs).catch(() => undefined))
+      const args = integration ? integration.args : baseArgs
       const cwd = input.cwd || location.directory
       const env = {
         ...process.env,
         ...input.env,
+        ...integration?.env,
         TERM: "xterm-256color",
         OPENCODE_TERMINAL: "1",
       } as Record<string, string>
@@ -189,6 +199,7 @@ const layer = Layer.effect(
         cwd,
         status: "running",
         pid: proc.pid,
+        sessionID: input.sessionID,
       }
       const session: Active = {
         info,
@@ -200,8 +211,50 @@ const layer = Layer.effect(
         listeners: [],
       }
       sessions.set(id, session)
+      // Command capture: observe the output stream for shell-integration markers.
+      const parser = integration ? PtyOsc.createParser() : undefined
+      const observe = (chunk: string) => {
+        if (!parser) return
+        for (const event of parser.push(chunk)) {
+          if (event.type === "cwd") {
+            observed.cwd = event.cwd
+            continue
+          }
+          if (event.type === "command-line") {
+            observed.command = event.command
+            continue
+          }
+          if (event.type === "pre-exec") {
+            const begun = Effect.runSync(
+              capture.begin({
+                ptyID: id,
+                sessionID: session.info.sessionID,
+                terminalTitle: session.info.title,
+                command: observed.command ?? "(unknown)",
+                cwd: observed.cwd,
+              }),
+            )
+            observed.command = undefined
+            observed.active = begun.id
+            runFork(events.publish(Pty.CommandEvent.Started, { command: begun }))
+            continue
+          }
+          if (event.type === "output") {
+            if (observed.active) Effect.runSync(capture.append(observed.active, PtyOsc.stripControl(event.data)))
+            continue
+          }
+          if (event.type === "finished") {
+            if (!observed.active) continue
+            const finished = Effect.runSync(capture.finish(observed.active, event.exitCode))
+            observed.active = undefined
+            if (finished) runFork(events.publish(Pty.CommandEvent.Finished, { command: finished }))
+          }
+        }
+      }
+      const observed: { command?: string; cwd?: string; active?: string } = { cwd }
       session.listeners.push(
         proc.onData((chunk) => {
+          observe(chunk)
           session.cursor += chunk.length
           for (const [token, subscriber] of session.subscribers.entries()) {
             if (!subscriber.active) {
@@ -224,6 +277,11 @@ const layer = Layer.effect(
           if (session.info.status === "exited") return
           session.info.status = "exited"
           session.info.exitCode = exitCode
+          if (observed.active) {
+            const finished = Effect.runSync(capture.finish(observed.active))
+            observed.active = undefined
+            if (finished) runFork(events.publish(Pty.CommandEvent.Finished, { command: finished }))
+          }
           notifyEnd(session, { exitCode })
           exitOrder.push(id)
           runFork(
@@ -315,4 +373,8 @@ const layer = Layer.effect(
 
 export const locationLayer = layer.pipe(Layer.provide(Config.locationLayer))
 
-export const node = makeLocationNode({ service: Service, layer, deps: [EventV2.node, Location.node, Config.node] })
+export const node = makeLocationNode({
+  service: Service,
+  layer,
+  deps: [EventV2.node, Location.node, Config.node, PtyCapture.node],
+})
