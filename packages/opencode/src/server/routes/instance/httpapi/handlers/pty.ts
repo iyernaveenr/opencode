@@ -35,6 +35,13 @@ const ticketScope = Effect.gen(function* () {
   return { directory: instance?.directory, workspaceID }
 })
 
+// Cross-session isolation: a request claiming a session may not touch a PTY owned by another
+// session (404, not 403, to avoid leaking existence). Requests without a claim and unowned
+// PTYs keep legacy workspace-scoped behavior.
+function ownedByOther(info: { sessionID?: string }, sessionID: string | undefined) {
+  return info.sessionID !== undefined && sessionID !== undefined && info.sessionID !== sessionID
+}
+
 // Legacy surface compatibility: before exited-session retention, sessions vanished the moment
 // their process exited. These routes preserve that observable behavior — exited sessions are
 // invisible here — while the canonical /api/pty surface exposes them until removal.
@@ -61,8 +68,8 @@ export const ptyHandlers = HttpApiBuilder.group(InstanceHttpApi, "pty", (handler
       return yield* Effect.promise(() => Shell.list())
     })
 
-    const list = Effect.fn("PtyHttpApi.list")(function* () {
-      const sessions = yield* pty(Pty.Service.use((service) => service.list()))
+    const list = Effect.fn("PtyHttpApi.list")(function* (ctx: { query: { sessionID?: string } }) {
+      const sessions = yield* pty(Pty.Service.use((service) => service.list({ sessionID: ctx.query.sessionID })))
       return sessions.filter((info) => info.status === "running")
     })
 
@@ -81,7 +88,10 @@ export const ptyHandlers = HttpApiBuilder.group(InstanceHttpApi, "pty", (handler
       )
     })
 
-    const get = Effect.fn("PtyHttpApi.get")(function* (ctx: { params: { ptyID: PtyID } }) {
+    const get = Effect.fn("PtyHttpApi.get")(function* (ctx: {
+      params: { ptyID: PtyID }
+      query: { sessionID?: string }
+    }) {
       return yield* pty(Pty.Service.use((service) => service.get(ctx.params.ptyID))).pipe(
         Effect.catchTag(
           "Pty.NotFoundError",
@@ -92,7 +102,7 @@ export const ptyHandlers = HttpApiBuilder.group(InstanceHttpApi, "pty", (handler
             }),
         ),
         Effect.flatMap((info) =>
-          info.status === "running"
+          info.status === "running" && !ownedByOther(info, ctx.query.sessionID)
             ? Effect.succeed(info)
             : new ApiError.PtyNotFoundError({
                 ptyID: ctx.params.ptyID,
@@ -104,6 +114,7 @@ export const ptyHandlers = HttpApiBuilder.group(InstanceHttpApi, "pty", (handler
 
     const update = Effect.fn("PtyHttpApi.update")(function* (ctx: {
       params: { ptyID: PtyID }
+      query: { sessionID?: string }
       payload: typeof Pty.UpdateInput.Type
     }) {
       yield* get(ctx)
@@ -126,7 +137,10 @@ export const ptyHandlers = HttpApiBuilder.group(InstanceHttpApi, "pty", (handler
       )
     })
 
-    const remove = Effect.fn("PtyHttpApi.remove")(function* (ctx: { params: { ptyID: PtyID } }) {
+    const remove = Effect.fn("PtyHttpApi.remove")(function* (ctx: {
+      params: { ptyID: PtyID }
+      query: { sessionID?: string }
+    }) {
       yield* get(ctx)
       yield* pty(Pty.Service.use((service) => service.remove(ctx.params.ptyID))).pipe(
         Effect.catchTag(
@@ -141,12 +155,15 @@ export const ptyHandlers = HttpApiBuilder.group(InstanceHttpApi, "pty", (handler
       return true
     })
 
-    const connectToken = Effect.fn("PtyHttpApi.connectToken")(function* (ctx: { params: { ptyID: PtyID } }) {
+    const connectToken = Effect.fn("PtyHttpApi.connectToken")(function* (ctx: {
+      params: { ptyID: PtyID }
+      query: { sessionID?: string }
+    }) {
       const request = yield* HttpServerRequest.HttpServerRequest
       if (request.headers[PTY_CONNECT_TOKEN_HEADER] !== PTY_CONNECT_TOKEN_HEADER_VALUE || !validOrigin(request, cors))
         return yield* new ApiError.PtyForbiddenError({ message: "Invalid PTY connect token request" })
       yield* get(ctx)
-      return yield* tickets.issue({ ptyID: ctx.params.ptyID, ...(yield* ticketScope) })
+      return yield* tickets.issue({ ptyID: ctx.params.ptyID, ...(yield* ticketScope), sessionID: ctx.query.sessionID })
     })
 
     return handlers
@@ -184,18 +201,24 @@ export const ptyConnectHandlers = HttpApiBuilder.group(PtyConnectApi, "pty-conne
         params: { ptyID: PtyID }
         request: HttpServerRequest.HttpServerRequest
       }) {
-        const exists = yield* pty(Pty.Service.use((service) => service.get(ctx.params.ptyID))).pipe(
-          Effect.map((info) => info.status === "running"),
-          Effect.catchTag("Pty.NotFoundError", () => Effect.succeed(false)),
+        const info = yield* pty(Pty.Service.use((service) => service.get(ctx.params.ptyID))).pipe(
+          Effect.map((found) => (found.status === "running" ? found : undefined)),
+          Effect.catchTag("Pty.NotFoundError", () => Effect.succeed(undefined)),
         )
-        if (!exists) return HttpServerResponse.empty({ status: 404 })
+        if (!info) return HttpServerResponse.empty({ status: 404 })
 
         const query = Schema.decodeUnknownOption(CursorQuery)(yield* HttpServerRequest.ParsedSearchParams)
         if (Option.isNone(query)) return HttpServerResponse.empty({ status: 400 })
+        if (ownedByOther(info, query.value.sessionID)) return HttpServerResponse.empty({ status: 404 })
         const ticket = new URL(ctx.request.url, "http://localhost").searchParams.get(PTY_CONNECT_TICKET_QUERY)
         if (ticket) {
           const valid = validOrigin(ctx.request, cors)
-            ? yield* tickets.consume({ ticket, ptyID: ctx.params.ptyID, ...(yield* ticketScope) })
+            ? yield* tickets.consume({
+                ticket,
+                ptyID: ctx.params.ptyID,
+                ...(yield* ticketScope),
+                sessionID: query.value.sessionID,
+              })
             : false
           if (!valid) return HttpServerResponse.empty({ status: 403 })
         }

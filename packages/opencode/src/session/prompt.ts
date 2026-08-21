@@ -4,6 +4,7 @@ import path from "path"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import os from "os"
 import { SessionID, MessageID, PartID } from "./schema"
+import { PtyCapture } from "@opencode-ai/core/pty/capture"
 import { MessageV2 } from "./message-v2"
 import { SessionRevert } from "./revert"
 import { Session } from "./session"
@@ -128,6 +129,7 @@ const layer = Layer.effect(
     const lsp = yield* LSP.Service
     const registry = yield* ToolRegistry.Service
     const truncate = yield* Truncate.Service
+    const capture = yield* PtyCapture.Service
     const image = yield* Image.Service
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
     const scope = yield* Scope.Scope
@@ -1078,6 +1080,62 @@ const layer = Layer.effect(
       throw new Error("Impossible")
     })
 
+    // Ambient terminal context (tier 1): bounded metadata about commands captured from this
+    // session's integrated terminals, injected as a non-persisted synthetic part each turn.
+    // 'ambient-full' additionally inlines bounded output of failures since the last user message.
+    const injectTerminalContext = Effect.fn("SessionPrompt.terminalContext")(function* (
+      sessionID: SessionID,
+      msgs: SessionV1.WithParts[],
+    ) {
+      const mode = (yield* config.get()).terminal_context ?? "off"
+      if (mode !== "ambient" && mode !== "ambient-full") return
+      const lastUser = msgs.findLast((msg) => msg.info.role === "user")
+      if (!lastUser) return
+      const commands = yield* capture.list(sessionID)
+      if (commands.length === 0) return
+      const recent = commands.slice(-5)
+      const lines = recent.map((command) => {
+        const state = command.status === "running" ? "running" : `exit ${command.exitCode ?? "?"}`
+        const text = command.command.length > 120 ? command.command.slice(0, 120) + "..." : command.command
+        return `[${command.id}] (${state}) $ ${text}`
+      })
+      const block = [
+        "<terminal-context>",
+        "Commands the user ran in this chat session's integrated terminal (most recent last).",
+        "Use the terminal tool with action 'output' and a commandID to read a command's captured output.",
+        ...lines,
+      ]
+      if (mode === "ambient-full") {
+        const since = lastUser.info.time.created
+        const failed = recent
+          .filter(
+            (command) =>
+              command.status === "completed" && (command.exitCode ?? 0) !== 0 && (command.time.end ?? 0) >= since,
+          )
+          .slice(-2)
+        for (const info of failed) {
+          const record = yield* capture.output(sessionID, info.id)
+          if (!record) continue
+          const gap = record.info.truncated ? "\n... (truncated) ...\n" : ""
+          const full = record.head + gap + record.tail
+          const tail = full.length > 2000 ? "..." + full.slice(-2000) : full
+          block.push(
+            `--- output of failed [${info.id}] $ ${info.command} (exit ${info.exitCode}) ---`,
+            tail || "(no output)",
+          )
+        }
+      }
+      block.push("</terminal-context>")
+      lastUser.parts.push({
+        id: PartID.ascending(),
+        messageID: lastUser.info.id,
+        sessionID,
+        type: "text",
+        text: block.join("\n"),
+        synthetic: true,
+      })
+    })
+
     const runLoop: (sessionID: SessionID) => Effect.Effect<SessionV1.WithParts> = Effect.fn("SessionPrompt.run")(
       function* (sessionID: SessionID) {
         const ctx = yield* InstanceState.context
@@ -1182,6 +1240,7 @@ const layer = Layer.effect(
             Effect.provideService(FSUtil.Service, fsys),
             Effect.provideService(Session.Service, sessions),
           )
+          yield* injectTerminalContext(sessionID, msgs)
 
           const msg: SessionV1.Assistant = {
             id: MessageID.ascending(),
@@ -1625,6 +1684,7 @@ export const node = LayerNode.make({
     EventV2Bridge.node,
     RuntimeFlags.node,
     Database.node,
+    PtyCapture.node,
   ],
 })
 

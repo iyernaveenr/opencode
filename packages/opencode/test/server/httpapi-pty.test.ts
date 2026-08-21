@@ -180,6 +180,72 @@ describe("pty HttpApi bridge", () => {
     expect(await list.json()).toEqual([])
   })
 
+  testPty("enforces chat-session ownership on PTY routes", async () => {
+    await using tmp = await tmpdir({ git: true, config: { formatter: false, lsp: false } })
+    const headers = { "x-opencode-directory": tmp.path }
+    const owner = "ses_owner0000000000000000"
+    const other = "ses_other0000000000000000"
+
+    const created = await app().request(PtyPaths.create, {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify({ command: "/usr/bin/env", args: ["sh", "-c", "sleep 5"], sessionID: owner }),
+    })
+    expect(created.status).toBe(200)
+    const info = await created.json()
+
+    try {
+      expect(info).toMatchObject({ sessionID: owner, status: "running" })
+
+      // Owner and legacy (no claim) requests pass; another session's claim gets 404.
+      const asOwner = await app().request(`${PtyPaths.get.replace(":ptyID", info.id)}?sessionID=${owner}`, { headers })
+      expect(asOwner.status).toBe(200)
+      const noClaim = await app().request(PtyPaths.get.replace(":ptyID", info.id), { headers })
+      expect(noClaim.status).toBe(200)
+      const asOther = await app().request(`${PtyPaths.get.replace(":ptyID", info.id)}?sessionID=${other}`, { headers })
+      expect(asOther.status).toBe(404)
+
+      // List filters by owning session.
+      const ownerList = await app().request(`${PtyPaths.list}?sessionID=${owner}`, { headers })
+      expect(await ownerList.json()).toEqual([expect.objectContaining({ id: info.id })])
+      const otherList = await app().request(`${PtyPaths.list}?sessionID=${other}`, { headers })
+      expect(await otherList.json()).toEqual([])
+
+      // Mutations from another session are rejected without leaking existence.
+      const otherUpdate = await app().request(`${PtyPaths.update.replace(":ptyID", info.id)}?sessionID=${other}`, {
+        method: "PUT",
+        headers: { ...headers, "content-type": "application/json" },
+        body: JSON.stringify({ title: "hijack" }),
+      })
+      expect(otherUpdate.status).toBe(404)
+      const otherRemove = await app().request(`${PtyPaths.remove.replace(":ptyID", info.id)}?sessionID=${other}`, {
+        method: "DELETE",
+        headers,
+      })
+      expect(otherRemove.status).toBe(404)
+
+      // Websocket connect is refused before upgrade for a foreign session claim.
+      const otherConnect = await app().request(
+        `${PtyPaths.connect.replace(":ptyID", info.id)}?cursor=-1&sessionID=${other}`,
+        { headers },
+      )
+      expect(otherConnect.status).toBe(404)
+
+      // Connect tokens minted for another session are denied outright.
+      const otherToken = await app().request(`${PtyPaths.connectToken.replace(":ptyID", info.id)}?sessionID=${other}`, {
+        method: "POST",
+        headers: { ...headers, "x-opencode-ticket": "1" },
+      })
+      expect(otherToken.status).toBe(404)
+    } finally {
+      const removed = await app().request(`${PtyPaths.remove.replace(":ptyID", info.id)}?sessionID=${owner}`, {
+        method: "DELETE",
+        headers,
+      })
+      expect(removed.status).toBe(200)
+    }
+  })
+
   test("returns 404 for missing PTY websocket before upgrade", async () => {
     await using tmp = await tmpdir({ git: true, config: { formatter: false, lsp: false } })
     const response = await app().request(PtyPaths.connect.replace(":ptyID", PtyID.ascending()), {
