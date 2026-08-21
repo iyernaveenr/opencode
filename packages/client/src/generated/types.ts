@@ -2561,6 +2561,7 @@ export type PtysListOutput = {
     readonly status: "running" | "exited"
     readonly pid: number
     readonly exitCode?: number
+    readonly sessionID?: string
   }>
 }
 
@@ -2574,6 +2575,7 @@ export type PtysCreateInput = {
     readonly cwd?: string
     readonly title?: string
     readonly env?: { readonly [x: string]: string }
+    readonly sessionID?: string
   }["command"]
   readonly args?: {
     readonly command?: string
@@ -2581,6 +2583,7 @@ export type PtysCreateInput = {
     readonly cwd?: string
     readonly title?: string
     readonly env?: { readonly [x: string]: string }
+    readonly sessionID?: string
   }["args"]
   readonly cwd?: {
     readonly command?: string
@@ -2588,6 +2591,7 @@ export type PtysCreateInput = {
     readonly cwd?: string
     readonly title?: string
     readonly env?: { readonly [x: string]: string }
+    readonly sessionID?: string
   }["cwd"]
   readonly title?: {
     readonly command?: string
@@ -2595,6 +2599,7 @@ export type PtysCreateInput = {
     readonly cwd?: string
     readonly title?: string
     readonly env?: { readonly [x: string]: string }
+    readonly sessionID?: string
   }["title"]
   readonly env?: {
     readonly command?: string
@@ -2602,7 +2607,16 @@ export type PtysCreateInput = {
     readonly cwd?: string
     readonly title?: string
     readonly env?: { readonly [x: string]: string }
+    readonly sessionID?: string
   }["env"]
+  readonly sessionID?: {
+    readonly command?: string
+    readonly args?: ReadonlyArray<string>
+    readonly cwd?: string
+    readonly title?: string
+    readonly env?: { readonly [x: string]: string }
+    readonly sessionID?: string
+  }["sessionID"]
 }
 
 export type PtysCreateOutput = {
@@ -2620,6 +2634,7 @@ export type PtysCreateOutput = {
     readonly status: "running" | "exited"
     readonly pid: number
     readonly exitCode?: number
+    readonly sessionID?: string
   }
 }
 
@@ -2645,6 +2660,7 @@ export type PtysGetOutput = {
     readonly status: "running" | "exited"
     readonly pid: number
     readonly exitCode?: number
+    readonly sessionID?: string
   }
 }
 
@@ -2675,6 +2691,7 @@ export type PtysUpdateOutput = {
     readonly status: "running" | "exited"
     readonly pid: number
     readonly exitCode?: number
+    readonly sessionID?: string
   }
 }
 

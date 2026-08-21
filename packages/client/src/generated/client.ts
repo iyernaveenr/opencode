@@ -840,6 +840,7 @@ export function make(options: ClientOptions) {
               cwd: input?.["cwd"],
               title: input?.["title"],
               env: input?.["env"],
+              sessionID: input?.["sessionID"],
             },
             successStatus: 200,
             declaredStatuses: [401, 400],

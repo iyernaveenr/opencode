@@ -64,6 +64,8 @@ export type Event =
   | EventPtyUpdated
   | EventPtyExited
   | EventPtyDeleted
+  | EventPtyCommandStarted
+  | EventPtyCommandFinished
   | EventQuestionV2Asked
   | EventQuestionV2Replied
   | EventQuestionV2Rejected
@@ -653,6 +655,24 @@ export type Pty = {
   status: "running" | "exited"
   pid: number
   exitCode?: number
+  sessionID?: string
+}
+
+export type PtyCommand = {
+  id: string
+  ptyID: string
+  sessionID?: string
+  terminalTitle: string
+  command: string
+  cwd?: string
+  status: "running" | "completed"
+  exitCode?: number
+  time: {
+    start: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    end?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  }
+  outputBytes: number
+  truncated: boolean
 }
 
 export type Todo = {
@@ -1330,6 +1350,20 @@ export type GlobalEvent = {
       }
     | {
         id: string
+        type: "pty.command.started"
+        properties: {
+          command: PtyCommand
+        }
+      }
+    | {
+        id: string
+        type: "pty.command.finished"
+        properties: {
+          command: PtyCommand
+        }
+      }
+    | {
+        id: string
         type: "question.v2.asked"
         properties: {
           id: string
@@ -1889,6 +1923,7 @@ export type AttachmentConfig = {
 export type Config = {
   $schema?: string
   shell?: string
+  terminal_context?: "off" | "tool-only" | "ambient" | "ambient-full"
   logLevel?: LogLevel
   server?: ServerConfig
   command?: {
@@ -2800,6 +2835,23 @@ export type OutputFormat1 =
       retryCount?: number
     }
 
+export type PtyCommand1 = {
+  id: string
+  ptyID: string
+  sessionID?: string
+  terminalTitle: string
+  command: string
+  cwd?: string
+  status: "running" | "completed"
+  exitCode?: number
+  time: {
+    start: number | "NaN" | "Infinity" | "-Infinity"
+    end?: number | "NaN" | "Infinity" | "-Infinity"
+  }
+  outputBytes: number
+  truncated: boolean
+}
+
 export type SessionStatus2 = {
   id: string
   metadata?: {
@@ -2915,6 +2967,8 @@ export type V2Event =
   | PtyUpdated
   | PtyExited
   | PtyDeleted
+  | PtyCommandStarted
+  | PtyCommandFinished
   | QuestionV2Asked
   | QuestionV2Replied
   | QuestionV2Rejected
@@ -2962,6 +3016,23 @@ export type ProjectCopyError = {
 
 export type EffectHttpApiErrorForbidden = {
   _tag: "Forbidden"
+}
+
+export type PtyCommand2 = {
+  id: string
+  ptyID: string
+  sessionID?: string
+  terminalTitle: string
+  command: string
+  cwd?: string
+  status: "running" | "completed"
+  exitCode?: number
+  time: {
+    start: number | "NaN" | "Infinity" | "-Infinity"
+    end?: number | "NaN" | "Infinity" | "-Infinity"
+  }
+  outputBytes: number
+  truncated: boolean
 }
 
 export type EventTuiPromptAppend2 = {
@@ -5601,6 +5672,40 @@ export type PtyDeleted = {
   }
 }
 
+export type PtyCommandStarted = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "pty.command.started"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    command: PtyCommand1
+  }
+}
+
+export type PtyCommandFinished = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "pty.command.finished"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    command: PtyCommand1
+  }
+}
+
 export type QuestionV2Asked = {
   id: string
   metadata?: {
@@ -6806,6 +6911,22 @@ export type EventPtyDeleted = {
   type: "pty.deleted"
   properties: {
     id: string
+  }
+}
+
+export type EventPtyCommandStarted = {
+  id: string
+  type: "pty.command.started"
+  properties: {
+    command: PtyCommand2
+  }
+}
+
+export type EventPtyCommandFinished = {
+  id: string
+  type: "pty.command.finished"
+  properties: {
+    command: PtyCommand2
   }
 }
 
@@ -8931,6 +9052,7 @@ export type PtyListData = {
   query?: {
     directory?: string
     workspace?: string
+    sessionID?: string
   }
   url: "/pty"
 }
@@ -8962,6 +9084,7 @@ export type PtyCreateData = {
     env?: {
       [key: string]: string
     }
+    sessionID?: string
   }
   path?: never
   query?: {
@@ -8997,6 +9120,7 @@ export type PtyRemoveData = {
   query?: {
     directory?: string
     workspace?: string
+    sessionID?: string
   }
   url: "/pty/{ptyID}"
 }
@@ -9031,6 +9155,7 @@ export type PtyGetData = {
   query?: {
     directory?: string
     workspace?: string
+    sessionID?: string
   }
   url: "/pty/{ptyID}"
 }
@@ -9071,6 +9196,7 @@ export type PtyUpdateData = {
   query?: {
     directory?: string
     workspace?: string
+    sessionID?: string
   }
   url: "/pty/{ptyID}"
 }
@@ -9105,6 +9231,7 @@ export type PtyConnectTokenData = {
   query?: {
     directory?: string
     workspace?: string
+    sessionID?: string
   }
   url: "/pty/{ptyID}/connect-token"
 }
@@ -13043,6 +13170,7 @@ export type V2PtyCreateData = {
     env?: {
       [key: string]: string
     }
+    sessionID?: string
   }
   path?: never
   query?: {
@@ -13597,6 +13725,7 @@ export type PtyConnectData = {
     directory?: string
     workspace?: string
     cursor?: string
+    sessionID?: string
     ticket?: string
   }
   url: "/pty/{ptyID}/connect"
