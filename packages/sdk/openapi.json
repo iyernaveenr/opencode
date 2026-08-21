@@ -4103,6 +4103,15 @@
               "type": "string"
             },
             "required": false
+          },
+          {
+            "name": "sessionID",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses"
+            },
+            "required": false
           }
         ],
         "responses": {
@@ -4218,6 +4227,10 @@
                     "additionalProperties": {
                       "type": "string"
                     }
+                  },
+                  "sessionID": {
+                    "type": "string",
+                    "pattern": "^ses"
                   }
                 },
                 "additionalProperties": false
@@ -4260,6 +4273,15 @@
             "in": "query",
             "schema": {
               "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "sessionID",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses"
             },
             "required": false
           }
@@ -4331,6 +4353,15 @@
             "in": "query",
             "schema": {
               "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "sessionID",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses"
             },
             "required": false
           }
@@ -4441,6 +4472,15 @@
               "type": "string"
             },
             "required": false
+          },
+          {
+            "name": "sessionID",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses"
+            },
+            "required": false
           }
         ],
         "responses": {
@@ -4513,6 +4553,15 @@
             "in": "query",
             "schema": {
               "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "sessionID",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses"
             },
             "required": false
           }
@@ -13986,6 +14035,10 @@
                     "additionalProperties": {
                       "type": "string"
                     }
+                  },
+                  "sessionID": {
+                    "type": "string",
+                    "pattern": "^ses"
                   }
                 },
                 "additionalProperties": false
@@ -15206,6 +15259,13 @@
           },
           {
             "in": "query",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
             "name": "ticket",
             "schema": {
               "type": "string"
@@ -15436,6 +15496,12 @@
           },
           {
             "$ref": "#/components/schemas/EventPtyDeleted"
+          },
+          {
+            "$ref": "#/components/schemas/EventPtyCommandStarted"
+          },
+          {
+            "$ref": "#/components/schemas/EventPtyCommandFinished"
           },
           {
             "$ref": "#/components/schemas/EventQuestionV2Asked"
@@ -17240,9 +17306,108 @@
           "exitCode": {
             "type": "integer",
             "minimum": 0
+          },
+          "sessionID": {
+            "type": "string",
+            "pattern": "^ses"
           }
         },
         "required": ["id", "title", "command", "args", "cwd", "status", "pid"],
+        "additionalProperties": false
+      },
+      "PtyCommand": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ptyID": {
+            "type": "string",
+            "pattern": "^pty"
+          },
+          "sessionID": {
+            "type": "string",
+            "pattern": "^ses"
+          },
+          "terminalTitle": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["running", "completed"]
+          },
+          "exitCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "start": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["NaN"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["-Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity", "-Infinity", "NaN"]
+                  }
+                ]
+              },
+              "end": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["NaN"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["-Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity", "-Infinity", "NaN"]
+                  }
+                ]
+              }
+            },
+            "required": ["start"],
+            "additionalProperties": false
+          },
+          "outputBytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "ptyID", "terminalTitle", "command", "status", "time", "outputBytes", "truncated"],
         "additionalProperties": false
       },
       "Todo": {
@@ -19515,6 +19680,56 @@
                   },
                   "type": {
                     "type": "string",
+                    "enum": ["pty.command.started"]
+                  },
+                  "properties": {
+                    "type": "object",
+                    "properties": {
+                      "command": {
+                        "$ref": "#/components/schemas/PtyCommand"
+                      }
+                    },
+                    "required": ["command"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["id", "type", "properties"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^evt_"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": ["pty.command.finished"]
+                  },
+                  "properties": {
+                    "type": "object",
+                    "properties": {
+                      "command": {
+                        "$ref": "#/components/schemas/PtyCommand"
+                      }
+                    },
+                    "required": ["command"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["id", "type", "properties"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^evt_"
+                  },
+                  "type": {
+                    "type": "string",
                     "enum": ["question.v2.asked"]
                   },
                   "properties": {
@@ -21123,6 +21338,10 @@
           },
           "shell": {
             "type": "string"
+          },
+          "terminal_context": {
+            "type": "string",
+            "enum": ["off", "tool-only", "ambient", "ambient-full"]
           },
           "logLevel": {
             "$ref": "#/components/schemas/LogLevel"
@@ -23849,6 +24068,93 @@
           }
         ]
       },
+      "PtyCommand1": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ptyID": {
+            "type": "string",
+            "pattern": "^pty"
+          },
+          "sessionID": {
+            "type": "string",
+            "pattern": "^ses"
+          },
+          "terminalTitle": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["running", "completed"]
+          },
+          "exitCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "start": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["NaN"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["-Infinity"]
+                  }
+                ]
+              },
+              "end": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["NaN"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["-Infinity"]
+                  }
+                ]
+              }
+            },
+            "required": ["start"],
+            "additionalProperties": false
+          },
+          "outputBytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "ptyID", "terminalTitle", "command", "status", "time", "outputBytes", "truncated"],
+        "additionalProperties": false
+      },
       "session.status": {
         "type": "object",
         "properties": {
@@ -24190,6 +24496,12 @@
             "$ref": "#/components/schemas/PtyDeleted"
           },
           {
+            "$ref": "#/components/schemas/PtyCommandStarted"
+          },
+          {
+            "$ref": "#/components/schemas/PtyCommandFinished"
+          },
+          {
             "$ref": "#/components/schemas/QuestionV2Asked"
           },
           {
@@ -24332,6 +24644,93 @@
           }
         },
         "required": ["_tag"],
+        "additionalProperties": false
+      },
+      "PtyCommand2": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ptyID": {
+            "type": "string",
+            "pattern": "^pty"
+          },
+          "sessionID": {
+            "type": "string",
+            "pattern": "^ses"
+          },
+          "terminalTitle": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["running", "completed"]
+          },
+          "exitCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "start": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["NaN"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["-Infinity"]
+                  }
+                ]
+              },
+              "end": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["NaN"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["-Infinity"]
+                  }
+                ]
+              }
+            },
+            "required": ["start"],
+            "additionalProperties": false
+          },
+          "outputBytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "ptyID", "terminalTitle", "command", "status", "time", "outputBytes", "truncated"],
         "additionalProperties": false
       },
       "Event.tui.prompt.append": {
@@ -32323,6 +32722,100 @@
         "required": ["id", "type", "data"],
         "additionalProperties": false
       },
+      "PtyCommandStarted": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^evt_"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["pty.command.started"]
+          },
+          "durable": {
+            "type": "object",
+            "properties": {
+              "aggregateID": {
+                "type": "string"
+              },
+              "seq": {
+                "type": "integer"
+              },
+              "version": {
+                "type": "integer"
+              }
+            },
+            "required": ["aggregateID", "seq", "version"],
+            "additionalProperties": false
+          },
+          "location": {
+            "$ref": "#/components/schemas/LocationRef"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "$ref": "#/components/schemas/PtyCommand1"
+              }
+            },
+            "required": ["command"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["id", "type", "data"],
+        "additionalProperties": false
+      },
+      "PtyCommandFinished": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^evt_"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["pty.command.finished"]
+          },
+          "durable": {
+            "type": "object",
+            "properties": {
+              "aggregateID": {
+                "type": "string"
+              },
+              "seq": {
+                "type": "integer"
+              },
+              "version": {
+                "type": "integer"
+              }
+            },
+            "required": ["aggregateID", "seq", "version"],
+            "additionalProperties": false
+          },
+          "location": {
+            "$ref": "#/components/schemas/LocationRef"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "$ref": "#/components/schemas/PtyCommand1"
+              }
+            },
+            "required": ["command"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["id", "type", "data"],
+        "additionalProperties": false
+      },
       "QuestionV2Asked": {
         "type": "object",
         "properties": {
@@ -35912,6 +36405,56 @@
               }
             },
             "required": ["id"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["id", "type", "properties"],
+        "additionalProperties": false
+      },
+      "EventPtyCommandStarted": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^evt_"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["pty.command.started"]
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "$ref": "#/components/schemas/PtyCommand2"
+              }
+            },
+            "required": ["command"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["id", "type", "properties"],
+        "additionalProperties": false
+      },
+      "EventPtyCommandFinished": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^evt_"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["pty.command.finished"]
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "$ref": "#/components/schemas/PtyCommand2"
+              }
+            },
+            "required": ["command"],
             "additionalProperties": false
           }
         },

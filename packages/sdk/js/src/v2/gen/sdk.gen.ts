@@ -2734,6 +2734,7 @@ export class Pty extends HeyApiClient {
     parameters?: {
       directory?: string
       workspace?: string
+      sessionID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2744,6 +2745,7 @@ export class Pty extends HeyApiClient {
           args: [
             { in: "query", key: "directory" },
             { in: "query", key: "workspace" },
+            { in: "query", key: "sessionID" },
           ],
         },
       ],
@@ -2771,6 +2773,7 @@ export class Pty extends HeyApiClient {
       env?: {
         [key: string]: string
       }
+      sessionID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2786,6 +2789,7 @@ export class Pty extends HeyApiClient {
             { in: "body", key: "cwd" },
             { in: "body", key: "title" },
             { in: "body", key: "env" },
+            { in: "body", key: "sessionID" },
           ],
         },
       ],
@@ -2812,6 +2816,7 @@ export class Pty extends HeyApiClient {
       ptyID: string
       directory?: string
       workspace?: string
+      sessionID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2823,6 +2828,7 @@ export class Pty extends HeyApiClient {
             { in: "path", key: "ptyID" },
             { in: "query", key: "directory" },
             { in: "query", key: "workspace" },
+            { in: "query", key: "sessionID" },
           ],
         },
       ],
@@ -2844,6 +2850,7 @@ export class Pty extends HeyApiClient {
       ptyID: string
       directory?: string
       workspace?: string
+      sessionID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2855,6 +2862,7 @@ export class Pty extends HeyApiClient {
             { in: "path", key: "ptyID" },
             { in: "query", key: "directory" },
             { in: "query", key: "workspace" },
+            { in: "query", key: "sessionID" },
           ],
         },
       ],
@@ -2876,6 +2884,7 @@ export class Pty extends HeyApiClient {
       ptyID: string
       directory?: string
       workspace?: string
+      sessionID?: string
       title?: string
       size?: {
         rows: number
@@ -2892,6 +2901,7 @@ export class Pty extends HeyApiClient {
             { in: "path", key: "ptyID" },
             { in: "query", key: "directory" },
             { in: "query", key: "workspace" },
+            { in: "query", key: "sessionID" },
             { in: "body", key: "title" },
             { in: "body", key: "size" },
           ],
@@ -2920,6 +2930,7 @@ export class Pty extends HeyApiClient {
       ptyID: string
       directory?: string
       workspace?: string
+      sessionID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2931,6 +2942,7 @@ export class Pty extends HeyApiClient {
             { in: "path", key: "ptyID" },
             { in: "query", key: "directory" },
             { in: "query", key: "workspace" },
+            { in: "query", key: "sessionID" },
           ],
         },
       ],
@@ -2953,6 +2965,7 @@ export class Pty extends HeyApiClient {
       directory?: string
       workspace?: string
       cursor?: string
+      sessionID?: string
       ticket?: string
     },
     options?: Options<never, ThrowOnError>,
@@ -2966,6 +2979,7 @@ export class Pty extends HeyApiClient {
             { in: "query", key: "directory" },
             { in: "query", key: "workspace" },
             { in: "query", key: "cursor" },
+            { in: "query", key: "sessionID" },
             { in: "query", key: "ticket" },
           ],
         },
@@ -6601,6 +6615,7 @@ export class Pty2 extends HeyApiClient {
       env?: {
         [key: string]: string
       }
+      sessionID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6615,6 +6630,7 @@ export class Pty2 extends HeyApiClient {
             { in: "body", key: "cwd" },
             { in: "body", key: "title" },
             { in: "body", key: "env" },
+            { in: "body", key: "sessionID" },
           ],
         },
       ],
