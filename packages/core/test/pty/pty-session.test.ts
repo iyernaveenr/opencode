@@ -232,7 +232,10 @@ describe("pty create defaults", () => {
         pty.remove(created.id).pipe(Effect.ignore),
       )
       expect(info.command).toBe(configuredShell)
-      expect(info.args).toEqual(["-l"])
+      // bash gets shell integration injected: --rcfile replaces -l (rcfile is ignored by
+      // login shells); the integration script sources ~/.bashrc itself.
+      expect(info.args[0]).toBe("--rcfile")
+      expect(info.args[1]).toEndWith("integration.bash")
       expect(info.cwd).toBe("/tmp")
       expect(info.title).toBe("configured")
     }),

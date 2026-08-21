@@ -59,4 +59,16 @@ describe("PTY websocket tickets", () => {
       expect(yield* tickets.consume({ ptyID, workspaceID, ticket: issued.ticket })).toBe(true)
     }),
   )
+
+  it.live("rejects tickets scoped to a different chat session", () =>
+    Effect.gen(function* () {
+      const tickets = yield* PtyTicket.Service
+      const ptyID = PtyID.ascending()
+      const issued = yield* tickets.issue({ ptyID, sessionID: "ses_owner" })
+
+      expect(yield* tickets.consume({ ptyID, sessionID: "ses_other", ticket: issued.ticket })).toBe(false)
+      expect(yield* tickets.consume({ ptyID, ticket: issued.ticket })).toBe(false)
+      expect(yield* tickets.consume({ ptyID, sessionID: "ses_owner", ticket: issued.ticket })).toBe(true)
+    }),
+  )
 })
