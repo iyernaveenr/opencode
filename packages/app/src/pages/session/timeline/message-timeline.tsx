@@ -791,6 +791,37 @@ export function MessageTimeline(props: {
     titleMutation.mutate({ id, title: next })
   }
 
+  const exportSessionToFolder = async (id: string) => {
+    const p = platform
+    if (p.platform !== "desktop" || !p.exportSessionFolder) return
+    try {
+      const infoResp: any = await serverSDK().client.session.get({ sessionID: id })
+      const info = infoResp?.data
+      if (!info) return
+      const items: any[] = []
+      let before: string | undefined = undefined
+      let pages = 0
+      for (;;) {
+        const resp: any = await serverSDK().client.session.messages({ sessionID: id, limit: 1000, before })
+        const page: any[] = resp?.data ?? []
+        items.push(...page)
+        const cursor = resp?.response?.headers?.get?.("x-next-cursor") ?? undefined
+        if (!cursor || page.length === 0 || ++pages > 100) break
+        before = cursor
+      }
+      items.sort((a, b) => (a?.info?.id < b?.info?.id ? -1 : a?.info?.id > b?.info?.id ? 1 : 0))
+      const messages = items.map((item) => ({
+        info: item.info,
+        parts: (item.parts ?? []).slice().sort((a: any, b: any) => (a?.id < b?.id ? -1 : a?.id > b?.id ? 1 : 0)),
+      }))
+      const payload = JSON.stringify({ info, messages })
+      const name = info.title ? `${info.title} ${id}` : id
+      await p.exportSessionFolder(payload, name)
+    } catch (err) {
+      console.error("export session to folder failed", err)
+    }
+  }
+
   const exportSession = async (sessionID: string) => {
     try {
       const data = await fetchSessionExport({
@@ -1620,6 +1651,11 @@ export function MessageTimeline(props: {
                               <MenuV2.Item onSelect={() => exportSession(id)}>
                                 {language.t("common.export")}...
                               </MenuV2.Item>
+                              <Show when={platform.platform === "desktop"}>
+                                <MenuV2.Item onSelect={() => void exportSessionToFolder(id)}>
+                                  Export to folder...
+                                </MenuV2.Item>
+                              </Show>
                               <MenuV2.Item onSelect={() => void sessionArchive.archive(id)}>
                                 {language.t("common.archive")}
                               </MenuV2.Item>
