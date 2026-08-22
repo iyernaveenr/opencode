@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process"
-import { stat } from "node:fs/promises"
+import { stat, unlink, writeFile } from "node:fs/promises"
 import { basename, join } from "node:path"
+import { homedir, tmpdir } from "node:os"
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from "electron"
 import type { IpcMainEvent, IpcMainInvokeEvent } from "electron"
 import type { DesktopMenuAction } from "@opencode-ai/app/desktop-menu"
@@ -214,6 +215,42 @@ export function registerIpcHandlers(deps: Deps) {
 
   ipcMain.on("open-local-file", (_event: IpcMainEvent, url: string) => {
     openLocalFileURL(url)
+  })
+
+  ipcMain.handle("export-session-folder", async (_event: IpcMainInvokeEvent, data: string, name: string) => {
+    const picked = await dialog.showOpenDialog({
+      properties: ["openDirectory", "createDirectory"],
+      title: "Choose a folder to export the session into",
+    })
+    if (picked.canceled || !picked.filePaths[0]) return null
+    const safe =
+      (name || "opencode-session")
+        .replace(/[^\w.\- ]+/g, "_")
+        .trim()
+        .slice(0, 80) || "opencode-session"
+    const outDir = join(picked.filePaths[0], safe)
+    const tmpJson = join(tmpdir(), `oc-export-${Date.now()}.json`)
+    await writeFile(tmpJson, data, "utf8")
+    const script = process.env.OC_CHAT_SAVE_SCRIPT || join(homedir(), "opencode", "oc-chat-save.py")
+    try {
+      await new Promise<void>((resolve, reject) => {
+        execFile("python3", [script, tmpJson, outDir], (err, _stdout, stderr) => {
+          if (err) {
+            reject(new Error((stderr && stderr.toString()) || err.message))
+            return
+          }
+          resolve()
+        })
+      })
+    } finally {
+      await unlink(tmpJson).catch(() => {})
+    }
+    await shell.openPath(outDir)
+    return outDir
+  })
+
+  ipcMain.on("open-link", (_event: IpcMainEvent, url: string) => {
+    void shell.openExternal(url)
   })
 
   ipcMain.handle("open-path", async (_event: IpcMainInvokeEvent, path: string, app?: string) => {

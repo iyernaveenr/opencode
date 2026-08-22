@@ -118,6 +118,8 @@ type PlatformBase = {
 
   /** Force focus styles on interactive elements through desktop devtools (desktop only) */
   setForceFocus?(enabled: boolean): Promise<void>
+  /** Export a session to a folder of markdown, html and attachments (desktop only) */
+  exportSessionFolder?(data: string, name: string): Promise<string | null>
 
   /** Record a fatal renderer error in platform logs (desktop only) */
   recordFatalRendererError?(error: FatalRendererErrorLog): Promise<void>
