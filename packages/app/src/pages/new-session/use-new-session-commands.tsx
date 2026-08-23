@@ -9,6 +9,9 @@ export function useNewSessionCommands(input: {
     empty: () => boolean
     open: () => void
   }
+  terminal: {
+    open: () => void
+  }
 }) {
   const command = useCommand()
   const dialog = useDialog()
@@ -39,6 +42,14 @@ export function useNewSessionCommands(input: {
       keybind: "mod+shift+o",
       disabled: input.project.empty(),
       onSelect: input.project.open,
+    },
+    {
+      id: "terminal.toggle",
+      title: language.t("command.terminal.toggle"),
+      category: language.t("command.category.view"),
+      keybind: "ctrl+`",
+      slash: "terminal",
+      onSelect: input.terminal.open,
     },
   ])
 }
