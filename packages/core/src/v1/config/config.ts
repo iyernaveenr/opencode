@@ -38,6 +38,10 @@ export const Info = Schema.Struct({
     description:
       "How GUI terminal activity reaches the model: 'off' (default) exposes nothing, 'tool-only' allows fetching via the terminal tool, 'ambient' additionally injects bounded command/exit-code metadata each turn, 'ambient-full' also auto-attaches bounded output of failed commands",
   }),
+  shell_in_terminal: Schema.optional(Schema.Literals(["off", "visible"])).annotate({
+    description:
+      "Where the model's shell commands execute: 'off' (default) uses isolated subprocesses, 'visible' runs them in the chat session's integrated terminal so the user can watch and reuse the same shell",
+  }),
   logLevel: Schema.optional(LogLevelRef).annotate({ description: "Log level" }),
   server: Schema.optional(ConfigServerV1.Server).annotate({
     description: "Server configuration for opencode serve and web commands",

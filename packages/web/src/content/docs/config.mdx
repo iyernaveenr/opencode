@@ -361,6 +361,24 @@ Capture uses bash shell integration (OSC 133 markers), is kept in memory only, b
 
 ---
 
+### Shell in terminal
+
+By default the model's shell commands run in isolated subprocesses that you never see. The `shell_in_terminal` option runs them in the chat session's own integrated terminal instead, so you can watch commands execute live and reuse the same shell afterwards - the same working directory, environment, and history.
+
+```json title="opencode.json"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "shell_in_terminal": "visible"
+}
+```
+
+- `off` - default. Commands run in isolated subprocesses; matches previous behavior.
+- `visible` - commands are typed into the session's terminal and their output is read back through shell integration. The terminal keeps its state between commands, and the model shares it with you.
+
+The visible path needs a session-owned terminal with bash shell integration active. When there is none, the terminal is busy running another command, the command spans multiple lines, or an explicit `workdir` is requested, the tool falls back to an isolated subprocess for that command. Aborting a chat message or hitting the timeout sends `Ctrl+C` to the terminal instead of killing it.
+
+---
+
 ### Tools
 
 You can manage the tools an LLM can use through the `tools` option.

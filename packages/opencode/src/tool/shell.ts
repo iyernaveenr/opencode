@@ -19,6 +19,7 @@ import * as Truncate from "./truncate"
 import { Plugin } from "@/plugin"
 import { ChildProcess } from "effect/unstable/process"
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner"
+import { PtyCapture } from "@opencode-ai/core/pty/capture"
 import { ShellPrompt, type Parameters } from "./shell/prompt"
 import { BashArity } from "@/permission/arity"
 
@@ -344,6 +345,7 @@ export const ShellTool = Tool.define(
     const trunc = yield* Truncate.Service
     const plugin = yield* Plugin.Service
     const flags = yield* RuntimeFlags.Service
+    const capture = yield* PtyCapture.Service
     const defaultTimeoutMs = flags.bashDefaultTimeoutMs ?? 2 * 60 * 1000
 
     const cygpath = Effect.fn("ShellTool.cygpath")(function* (shell: string, text: string) {
@@ -422,6 +424,101 @@ export const ShellTool = Tool.define(
       return {
         ...process.env,
         ...extra.env,
+      }
+    })
+
+    // Visible mode: type the command into the session's own integrated terminal and
+    // harvest the result from the shell-integration capture. Returns undefined when
+    // no eligible terminal exists (caller falls back to an isolated subprocess).
+    // After the command is typed there is no fallback: re-running it in a subprocess
+    // could execute it twice.
+    const runInTerminal = Effect.fn("ShellTool.runInTerminal")(function* (
+      input: { command: string; timeout: number },
+      ctx: Tool.Context,
+    ) {
+      const sessionID = ctx.sessionID
+      if (!sessionID) return undefined
+      const handle = yield* capture.terminal(sessionID)
+      if (!handle) return undefined
+      const before = yield* capture.list(sessionID)
+      // Never interleave two commands in one shell.
+      if (before.some((cmd) => cmd.ptyID === handle.ptyID && cmd.status === "running")) return undefined
+      const known = new Set(before.map((cmd) => cmd.id))
+
+      const limits = yield* trunc.limits()
+      const POLL_MS = 120
+      const APPEAR_MS = 5000
+      const DRAIN_MS = 2000
+      const CTRL_C = "\x03"
+
+      yield* ctx.metadata({ metadata: { output: "" } })
+      yield* Effect.sync(() => handle.write(input.command + "\r"))
+
+      // Wait for shell integration to acknowledge the command (pre-exec marker).
+      let commandID: string | undefined
+      const appearBy = Date.now() + APPEAR_MS
+      while (Date.now() < appearBy && !ctx.abort.aborted) {
+        const fresh = (yield* capture.list(sessionID)).find((cmd) => cmd.ptyID === handle.ptyID && !known.has(cmd.id))
+        if (fresh) {
+          commandID = fresh.id
+          break
+        }
+        yield* Effect.sleep(`${POLL_MS} millis`)
+      }
+
+      let expired = false
+      let aborted = false
+      if (commandID) {
+        const stop = Date.now() + input.timeout
+        let interruptAt: number | undefined
+        while (true) {
+          const current = (yield* capture.list(sessionID)).find((cmd) => cmd.id === commandID)
+          if (!current || current.status !== "running") break
+          const now = Date.now()
+          if (interruptAt === undefined) {
+            if (ctx.abort.aborted) {
+              aborted = true
+              yield* Effect.sync(() => handle.write(CTRL_C))
+              interruptAt = now + DRAIN_MS
+            } else if (now > stop) {
+              expired = true
+              yield* Effect.sync(() => handle.write(CTRL_C))
+              interruptAt = now + DRAIN_MS
+            }
+          } else if (now > interruptAt) break
+          const record = yield* capture.output(sessionID, commandID)
+          if (record) yield* ctx.metadata({ metadata: { output: preview(record.tail || record.head) } })
+          yield* Effect.sleep(`${POLL_MS} millis`)
+        }
+      }
+
+      const record = commandID ? yield* capture.output(sessionID, commandID) : undefined
+      const raw = record ? record.head + record.tail : ""
+      const meta: string[] = ["Command ran in the user's session terminal (output captured from that terminal)."]
+      if (!commandID)
+        meta.push(
+          "The terminal did not acknowledge the command via shell integration. It may still be running or typed there; inspect the terminal before retrying.",
+        )
+      if (expired)
+        meta.push(
+          `shell tool sent Ctrl+C after exceeding timeout ${input.timeout} ms. If this command is expected to take longer and is not waiting for interactive input, retry with a larger timeout value in milliseconds.`,
+        )
+      if (aborted) meta.push("User aborted the command (Ctrl+C sent to the terminal).")
+      const end = tail(raw, limits.maxLines, limits.maxBytes)
+      let cut = record?.info.truncated ?? false
+      if (end.cut) cut = true
+      let output = end.text
+      if (!output) output = "(no output)"
+      if (cut) output = "...output truncated (terminal capture keeps the first 8KB and last 56KB)...\n\n" + output
+      output += "\n\n<shell_metadata>\n" + meta.join("\n") + "\n</shell_metadata>"
+      return {
+        title: input.command,
+        metadata: {
+          output: preview(output),
+          exit: record?.info.exitCode ?? null,
+          truncated: cut,
+        },
+        output,
       }
     })
 
@@ -627,6 +724,14 @@ export const ShellTool = Tool.define(
                   yield* ask(ctx, scan, params)
                 }),
               )
+
+              // Terminal-visible path: no explicit workdir (the terminal keeps its own
+              // cwd) and single-line commands only (multi-line input would be split by
+              // the interactive shell).
+              if (cfg.shell_in_terminal === "visible" && !params.workdir && !params.command.includes("\n")) {
+                const viaTerminal = yield* runInTerminal({ command: params.command, timeout }, ctx)
+                if (viaTerminal) return viaTerminal
+              }
 
               return yield* run(
                 {

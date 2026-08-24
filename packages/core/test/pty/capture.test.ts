@@ -74,4 +74,22 @@ describe("PTY command capture store", () => {
       expect(yield* capture.output("ses_capture_ring", ids[0]!)).toBeUndefined()
     }),
   )
+
+  it.live("tracks terminal handles per session, last registered wins", () =>
+    Effect.gen(function* () {
+      const capture = yield* PtyCapture.Service
+      const first = PtyID.ascending()
+      const second = PtyID.ascending()
+      const noop = () => {}
+      expect(yield* capture.terminal("ses_capture_term")).toBeUndefined()
+      yield* capture.registerTerminal("ses_capture_term", { ptyID: first, write: noop })
+      yield* capture.registerTerminal("ses_capture_term", { ptyID: second, write: noop })
+      expect((yield* capture.terminal("ses_capture_term"))?.ptyID).toBe(second)
+      expect(yield* capture.terminal("ses_capture_other")).toBeUndefined()
+      yield* capture.unregisterTerminal("ses_capture_term", second)
+      expect((yield* capture.terminal("ses_capture_term"))?.ptyID).toBe(first)
+      yield* capture.unregisterTerminal("ses_capture_term", first)
+      expect(yield* capture.terminal("ses_capture_term")).toBeUndefined()
+    }),
+  )
 })
