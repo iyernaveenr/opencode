@@ -26,12 +26,23 @@ export type BeginInput = {
   readonly cwd?: string
 }
 
+// Write access to a live, integration-enabled PTY owned by a session. Registered
+// by the Pty service so session-scoped consumers (e.g. the shell tool in visible
+// mode) can type into the terminal without a dependency on location-scoped services.
+export type TerminalHandle = {
+  readonly ptyID: Pty.Command["ptyID"]
+  readonly write: (data: string) => void
+}
+
 export interface Interface {
   readonly begin: (input: BeginInput) => Effect.Effect<Pty.Command>
   readonly append: (commandID: string, data: string) => Effect.Effect<void>
   readonly finish: (commandID: string, exitCode?: number) => Effect.Effect<Pty.Command | undefined>
   readonly list: (sessionID: string) => Effect.Effect<Pty.Command[]>
   readonly output: (sessionID: string, commandID: string) => Effect.Effect<Record | undefined>
+  readonly registerTerminal: (sessionID: string, handle: TerminalHandle) => Effect.Effect<void>
+  readonly unregisterTerminal: (sessionID: string, ptyID: string) => Effect.Effect<void>
+  readonly terminal: (sessionID: string) => Effect.Effect<TerminalHandle | undefined>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/PtyCapture") {}
@@ -39,6 +50,7 @@ export class Service extends Context.Service<Service, Interface>()("@opencode/Pt
 const layer = Layer.sync(Service, () => {
   const records = new Map<string, Record>()
   const bySession = new Map<string, string[]>()
+  const terminals = new Map<string, TerminalHandle[]>()
 
   const evict = (sessionID: string) => {
     const ids = bySession.get(sessionID)
@@ -111,6 +123,23 @@ const layer = Layer.sync(Service, () => {
       if (!record) return undefined
       if (record.info.sessionID !== sessionID) return undefined
       return record
+    }),
+    registerTerminal: Effect.fnUntraced(function* (sessionID: string, handle: TerminalHandle) {
+      const handles = terminals.get(sessionID) ?? []
+      handles.push(handle)
+      terminals.set(sessionID, handles)
+    }),
+    unregisterTerminal: Effect.fnUntraced(function* (sessionID: string, ptyID: string) {
+      const handles = terminals.get(sessionID)
+      if (!handles) return
+      const next = handles.filter((handle) => handle.ptyID !== ptyID)
+      if (next.length === 0) terminals.delete(sessionID)
+      else terminals.set(sessionID, next)
+    }),
+    terminal: Effect.fnUntraced(function* (sessionID: string) {
+      const handles = terminals.get(sessionID)
+      // Most recently opened terminal wins.
+      return handles?.at(-1)
     }),
   })
 })

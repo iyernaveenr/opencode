@@ -118,6 +118,7 @@ const layer = Layer.effect(
     }
 
     function teardown(session: Active) {
+      releaseTerminal(session)
       for (const listener of session.listeners) listener.dispose()
       session.listeners.length = 0
       if (session.info.status === "running") {
@@ -126,6 +127,12 @@ const layer = Layer.effect(
         } catch {}
       }
       notifyEnd(session, {})
+    }
+
+    function releaseTerminal(session: Active) {
+      const owner = session.info.sessionID
+      if (!owner) return
+      Effect.runSync(capture.unregisterTerminal(owner, session.info.id))
     }
 
     yield* Effect.addFinalizer(() =>
@@ -211,6 +218,14 @@ const layer = Layer.effect(
         listeners: [],
       }
       sessions.set(id, session)
+      // Session-owned, integration-enabled terminals accept typed input from the
+      // owning chat session (shell_in_terminal). Others stay keyboard-only.
+      if (integration && input.sessionID) {
+        yield* capture.registerTerminal(input.sessionID, {
+          ptyID: id,
+          write: (data) => proc.write(data),
+        })
+      }
       // Command capture: observe the output stream for shell-integration markers.
       const parser = integration ? PtyOsc.createParser() : undefined
       const observe = (chunk: string) => {
@@ -277,6 +292,7 @@ const layer = Layer.effect(
           if (session.info.status === "exited") return
           session.info.status = "exited"
           session.info.exitCode = exitCode
+          releaseTerminal(session)
           if (observed.active) {
             const finished = Effect.runSync(capture.finish(observed.active))
             observed.active = undefined
