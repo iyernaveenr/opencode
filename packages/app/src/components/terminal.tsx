@@ -17,7 +17,7 @@ import { terminalFontFamily, useSettings } from "@/context/settings"
 import { SESSION_SCOPED_TERMINALS, type LocalPTY } from "@/context/terminal"
 import { disposeIfDisposable, getHoveredLinkText, setOptionIfSupported } from "@/utils/runtime-adapters"
 import { terminalWriter } from "@/utils/terminal-writer"
-import { terminalWebSocketURL } from "@/utils/terminal-websocket-url"
+import { initialReplayCursor, terminalWebSocketURL } from "@/utils/terminal-websocket-url"
 
 const TOGGLE_TERMINAL_ID = "terminal.toggle"
 const DEFAULT_TOGGLE_TERMINAL_KEYBIND = "ctrl+`"
@@ -226,7 +226,7 @@ export const Terminal = (props: TerminalProps) => {
   const start =
     typeof local.pty.cursor === "number" && Number.isSafeInteger(local.pty.cursor) ? local.pty.cursor : undefined
   let cursor = start ?? 0
-  let seek = start !== undefined ? start : restore ? -1 : 0
+  let seek = initialReplayCursor(start, restore !== "")
   let output: ReturnType<typeof terminalWriter> | undefined
   let drop: VoidFunction | undefined
   let reconn: ReturnType<typeof setTimeout> | undefined

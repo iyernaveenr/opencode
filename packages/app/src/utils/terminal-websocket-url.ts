@@ -1,5 +1,14 @@
 import { authTokenFromCredentials } from "@/utils/server"
 
+// Where server replay starts. A stored cursor is only meaningful together with the
+// screen snapshot it complements: with both, resume from the cursor; snapshot
+// alone tails (-1); otherwise replay the full retained buffer (0) so scrollback
+// survives snapshot loss (e.g. session store swaps on tab switch).
+export function initialReplayCursor(stored: number | undefined, hasSnapshot: boolean): number {
+  if (hasSnapshot) return stored ?? -1
+  return 0
+}
+
 export function terminalWebSocketURL(input: {
   protocol?: "v1" | "v2"
   url: string
