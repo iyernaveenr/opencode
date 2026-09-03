@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { terminalWebSocketURL } from "./terminal-websocket-url"
+import { initialReplayCursor, terminalWebSocketURL } from "./terminal-websocket-url"
 
 describe("terminalWebSocketURL", () => {
   test("carries the owning session claim and omits it when absent", () => {
@@ -97,5 +97,20 @@ describe("terminalWebSocketURL", () => {
     expect(url.pathname).toBe("/pty/pty_test/connect")
     expect(url.searchParams.get("directory")).toBe("/tmp/project")
     expect(url.searchParams.get("auth_token")).toBe(btoa("opencode:secret"))
+  })
+})
+
+describe("initialReplayCursor", () => {
+  test("resumes from the cursor when the snapshot is present", () => {
+    expect(initialReplayCursor(1234, true)).toBe(1234)
+  })
+
+  test("tails when only the snapshot is present", () => {
+    expect(initialReplayCursor(undefined, true)).toBe(-1)
+  })
+
+  test("replays the full buffer when the snapshot is missing", () => {
+    expect(initialReplayCursor(1234, false)).toBe(0)
+    expect(initialReplayCursor(undefined, false)).toBe(0)
   })
 })
