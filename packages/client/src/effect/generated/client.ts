@@ -1223,7 +1223,9 @@ const adaptGroupEvent = (raw: RawClient["server.event"]) => ({ subscribe: Endpoi
 
 const EndpointPtyList = (raw: RawClient["server.pty"]) => (input?: PtyListInput) =>
   preserveEffect<PtyListOutput>()(
-    raw["pty.list"]({ query: { location: input?.["location"] } }).pipe(Effect.mapError(mapClientError)),
+    raw["pty.list"]({ query: { location: input?.["location"], sessionID: input?.["sessionID"] } }).pipe(
+      Effect.mapError(mapClientError),
+    ),
   )
 
 const EndpointPtyCreate = (raw: RawClient["server.pty"]) => (input?: PtyCreateInput) =>
@@ -1236,38 +1238,41 @@ const EndpointPtyCreate = (raw: RawClient["server.pty"]) => (input?: PtyCreateIn
         cwd: input?.["cwd"],
         title: input?.["title"],
         env: input?.["env"],
+        sessionID: input?.["sessionID"],
       },
     }).pipe(Effect.mapError(mapClientError)),
   )
 
 const EndpointPtyGet = (raw: RawClient["server.pty"]) => (input: PtyGetInput) =>
   preserveEffect<PtyGetOutput>()(
-    raw["pty.get"]({ params: { ptyID: input["ptyID"] }, query: { location: input["location"] } }).pipe(
-      Effect.mapError(mapClientError),
-    ),
+    raw["pty.get"]({
+      params: { ptyID: input["ptyID"] },
+      query: { location: input["location"], sessionID: input["sessionID"] },
+    }).pipe(Effect.mapError(mapClientError)),
   )
 
 const EndpointPtyUpdate = (raw: RawClient["server.pty"]) => (input: PtyUpdateInput) =>
   preserveEffect<PtyUpdateOutput>()(
     raw["pty.update"]({
       params: { ptyID: input["ptyID"] },
-      query: { location: input["location"] },
+      query: { location: input["location"], sessionID: input["sessionID"] },
       payload: { title: input["title"], size: input["size"] },
     }).pipe(Effect.mapError(mapClientError)),
   )
 
 const EndpointPtyRemove = (raw: RawClient["server.pty"]) => (input: PtyRemoveInput) =>
   preserveEffect<PtyRemoveOutput>()(
-    raw["pty.remove"]({ params: { ptyID: input["ptyID"] }, query: { location: input["location"] } }).pipe(
-      Effect.mapError(mapClientError),
-    ),
+    raw["pty.remove"]({
+      params: { ptyID: input["ptyID"] },
+      query: { location: input["location"], sessionID: input["sessionID"] },
+    }).pipe(Effect.mapError(mapClientError)),
   )
 
 const EndpointPtyConnectToken = (raw: RawClient["server.pty"]) => (input: PtyConnectTokenInput) =>
   preserveEffect<PtyConnectTokenOutput>()(
     raw["pty.connectToken"]({
       params: { ptyID: input["ptyID"] },
-      query: { location: input["location"] },
+      query: { location: input["location"], sessionID: input["sessionID"] },
       headers: { "x-opencode-ticket": input["x-opencode-ticket"] },
     }).pipe(Effect.mapError(mapClientError)),
   )

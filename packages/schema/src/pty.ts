@@ -5,6 +5,7 @@ import { optional } from "./schema.js"
 import { ephemeral, inventory } from "./event.js"
 import { ascending } from "./identifier.js"
 import { NonNegativeInt, PositiveInt, statics } from "./schema.js"
+import { SessionID } from "./session-id.js"
 
 const IDSchema = Schema.String.check(Schema.isStartsWith("pty")).pipe(Schema.brand("PtyID"))
 
@@ -28,6 +29,8 @@ export const Info = Schema.Struct({
   status: Schema.Literals(["running", "exited"]),
   pid: NonNegativeInt,
   exitCode: optional(NonNegativeInt),
+  // Owning chat session. Unowned sessions keep workspace-wide visibility.
+  sessionID: optional(SessionID),
 }).annotate({ identifier: "Pty" })
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 
@@ -43,6 +46,7 @@ export const CreateInput = Schema.Struct({
   cwd: optional(Schema.String),
   title: optional(Schema.String),
   env: optional(Schema.Record(Schema.String, Schema.String)),
+  sessionID: optional(SessionID),
 })
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 

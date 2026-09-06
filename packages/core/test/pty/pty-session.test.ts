@@ -7,6 +7,7 @@ import { Location } from "@opencode-ai/core/location"
 import { Pty } from "@opencode-ai/core/pty"
 import { PtyID } from "@opencode-ai/core/pty/schema"
 import { AbsolutePath } from "@opencode-ai/core/schema"
+import { SessionID } from "@opencode-ai/schema/session-id"
 import { ShellSelect } from "@opencode-ai/core/shell/select"
 import { location } from "../fixture/location"
 import { testEffect } from "../lib/effect"
@@ -87,6 +88,29 @@ const waitForOutput = (output: Queue.Queue<string>, text: string) =>
   )
 
 describe("pty", () => {
+  ptyTest("stamps the owning session and filters listings by it", () =>
+    Effect.gen(function* () {
+      const pty = yield* Pty.Service
+      const ownerID = SessionID.make("ses_owner")
+      const owned = yield* Effect.acquireRelease(
+        pty.create({ command: "cat", cwd: "/tmp", sessionID: ownerID }),
+        (info) => pty.remove(info.id).pipe(Effect.ignore),
+      )
+      const shared = yield* createPty("cat")
+
+      expect(owned.sessionID).toBe(ownerID)
+      expect(shared.sessionID).toBeUndefined()
+
+      const all = (yield* pty.list()).map((info) => info.id)
+      expect(all).toContain(owned.id)
+      expect(all).toContain(shared.id)
+
+      const mine = (yield* pty.list({ sessionID: "ses_owner" })).map((info) => info.id)
+      expect(mine).toEqual([owned.id])
+      expect((yield* pty.list({ sessionID: "ses_other" })).length).toBe(0)
+    }),
+  )
+
   it.live("returns typed not found errors for missing sessions", () =>
     Effect.gen(function* () {
       const pty = yield* Pty.Service

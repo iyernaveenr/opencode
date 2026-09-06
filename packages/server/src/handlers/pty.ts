@@ -1,4 +1,5 @@
 import { Pty } from "@opencode-ai/core/pty"
+import { PtyID } from "@opencode-ai/core/pty/schema"
 import { PtyProtocol } from "@opencode-ai/core/pty/protocol"
 import { PtyTicket } from "@opencode-ai/core/pty/ticket"
 import { Location } from "@opencode-ai/core/location"
@@ -13,6 +14,7 @@ import {
   PTY_CONNECT_TICKET_QUERY,
   PTY_CONNECT_TOKEN_HEADER,
   PTY_CONNECT_TOKEN_HEADER_VALUE,
+  PTY_SESSION_QUERY,
 } from "@opencode-ai/protocol/groups/pty"
 import { response } from "../location"
 import { PtyEnvironment } from "../pty-environment"
@@ -21,6 +23,23 @@ import { runPtySocket } from "./pty-socket"
 const ticketScope = Effect.gen(function* () {
   const location = yield* Location.Service
   return { directory: location.directory as string, workspaceID: location.workspaceID }
+})
+
+// Cross-session isolation: a caller claiming a session may not touch a PTY owned by another
+// session. Respond 404 rather than 403 so existence does not leak. Unclaimed requests and
+// unowned PTYs keep legacy workspace-scoped behavior.
+function ownedByOther(info: { sessionID?: string }, sessionID: string | undefined) {
+  return info.sessionID !== undefined && sessionID !== undefined && info.sessionID !== sessionID
+}
+
+const notFound = (ptyID: PtyID) => new PtyNotFoundError({ ptyID, message: `PTY session not found: ${ptyID}` })
+
+// Resolve a PTY the caller is allowed to see, folding ownership violations into not-found.
+const visible = Effect.fn("PtyHandler.visible")(function* (ptyID: PtyID, sessionID: string | undefined) {
+  const pty = yield* Pty.Service
+  const info = yield* pty.get(ptyID).pipe(Effect.catchTag("Pty.NotFoundError", () => notFound(ptyID)))
+  if (ownedByOther(info, sessionID)) return yield* notFound(ptyID)
+  return info
 })
 
 export const PtyHandler = HttpApiBuilder.group(Api, "server.pty", (handlers) =>
@@ -32,9 +51,9 @@ export const PtyHandler = HttpApiBuilder.group(Api, "server.pty", (handlers) =>
     return handlers
       .handle(
         "pty.list",
-        Effect.fn(function* () {
+        Effect.fn(function* (ctx) {
           const pty = yield* Pty.Service
-          return yield* response(pty.list())
+          return yield* response(pty.list({ sessionID: ctx.query[PTY_SESSION_QUERY] }))
         }),
       )
       .handle(
@@ -59,41 +78,21 @@ export const PtyHandler = HttpApiBuilder.group(Api, "server.pty", (handlers) =>
       .handle(
         "pty.get",
         Effect.fn(function* (ctx) {
-          const pty = yield* Pty.Service
-          return yield* response(
-            pty.get(ctx.params.ptyID).pipe(
-              Effect.catchTag(
-                "Pty.NotFoundError",
-                () =>
-                  new PtyNotFoundError({
-                    ptyID: ctx.params.ptyID,
-                    message: `PTY session not found: ${ctx.params.ptyID}`,
-                  }),
-              ),
-            ),
-          )
+          return yield* response(visible(ctx.params.ptyID, ctx.query[PTY_SESSION_QUERY]))
         }),
       )
       .handle(
         "pty.update",
         Effect.fn(function* (ctx) {
           const pty = yield* Pty.Service
+          yield* visible(ctx.params.ptyID, ctx.query[PTY_SESSION_QUERY])
           return yield* response(
             pty
               .update(ctx.params.ptyID, {
                 ...ctx.payload,
                 size: ctx.payload.size ? { ...ctx.payload.size } : undefined,
               })
-              .pipe(
-                Effect.catchTag(
-                  "Pty.NotFoundError",
-                  () =>
-                    new PtyNotFoundError({
-                      ptyID: ctx.params.ptyID,
-                      message: `PTY session not found: ${ctx.params.ptyID}`,
-                    }),
-                ),
-              ),
+              .pipe(Effect.catchTag("Pty.NotFoundError", () => notFound(ctx.params.ptyID))),
           )
         }),
       )
@@ -101,16 +100,10 @@ export const PtyHandler = HttpApiBuilder.group(Api, "server.pty", (handlers) =>
         "pty.remove",
         Effect.fn(function* (ctx) {
           const pty = yield* Pty.Service
-          yield* pty.remove(ctx.params.ptyID).pipe(
-            Effect.catchTag(
-              "Pty.NotFoundError",
-              () =>
-                new PtyNotFoundError({
-                  ptyID: ctx.params.ptyID,
-                  message: `PTY session not found: ${ctx.params.ptyID}`,
-                }),
-            ),
-          )
+          yield* visible(ctx.params.ptyID, ctx.query[PTY_SESSION_QUERY])
+          yield* pty
+            .remove(ctx.params.ptyID)
+            .pipe(Effect.catchTag("Pty.NotFoundError", () => notFound(ctx.params.ptyID)))
           return HttpApiSchema.NoContent.make()
         }),
       )
@@ -125,35 +118,27 @@ export const PtyHandler = HttpApiBuilder.group(Api, "server.pty", (handlers) =>
             !isAllowedRequestOrigin(request.headers.origin, request.headers.host, cors)
           )
             return yield* new ForbiddenError({ message: "Invalid PTY connect token request" })
-          const pty = yield* Pty.Service
-          yield* pty.get(ctx.params.ptyID).pipe(
-            Effect.catchTag(
-              "Pty.NotFoundError",
-              () =>
-                new PtyNotFoundError({
-                  ptyID: ctx.params.ptyID,
-                  message: `PTY session not found: ${ctx.params.ptyID}`,
-                }),
-            ),
-          )
-          return yield* response(tickets.issue({ ptyID: ctx.params.ptyID, ...(yield* ticketScope) }))
+          const sessionID = ctx.query[PTY_SESSION_QUERY]
+          yield* visible(ctx.params.ptyID, sessionID)
+          return yield* response(tickets.issue({ ptyID: ctx.params.ptyID, sessionID, ...(yield* ticketScope) }))
         }),
       )
       .handleRaw(
         "pty.connect",
         Effect.fn("PtyHandler.connect")(function* (ctx) {
           const pty = yield* Pty.Service
+          const url = new URL(ctx.request.url, "http://localhost")
+          const sessionID = url.searchParams.get(PTY_SESSION_QUERY) ?? undefined
           const exists = yield* pty.get(ctx.params.ptyID).pipe(
-            Effect.as(true),
+            Effect.map((info) => !ownedByOther(info, sessionID)),
             Effect.catchTag("Pty.NotFoundError", () => Effect.succeed(false)),
           )
           if (!exists) return HttpServerResponse.empty({ status: 404 })
 
-          const url = new URL(ctx.request.url, "http://localhost")
           const ticket = url.searchParams.get(PTY_CONNECT_TICKET_QUERY)
           if (ticket) {
             const valid = isAllowedRequestOrigin(ctx.request.headers.origin, ctx.request.headers.host, cors)
-              ? yield* tickets.consume({ ticket, ptyID: ctx.params.ptyID, ...(yield* ticketScope) })
+              ? yield* tickets.consume({ ticket, ptyID: ctx.params.ptyID, sessionID, ...(yield* ticketScope) })
               : false
             if (!valid) return HttpServerResponse.empty({ status: 403 })
           }

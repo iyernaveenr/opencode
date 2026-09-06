@@ -77,7 +77,7 @@ export class ExitedError extends Schema.TaggedError<ExitedError>()("Pty.ExitedEr
 }) {}
 
 export interface Interface {
-  readonly list: () => Effect.Effect<Info[]>
+  readonly list: (filter?: { readonly sessionID?: string }) => Effect.Effect<Info[]>
   readonly get: (id: PtyID) => Effect.Effect<Info, NotFoundError>
   readonly create: (input: CreateInput) => Effect.Effect<Info>
   readonly update: (id: PtyID, input: UpdateInput) => Effect.Effect<Info, NotFoundError>
@@ -153,8 +153,10 @@ const layer = Layer.effect(
       yield* removeSession(id)
     })
 
-    const list = Effect.fn("Pty.list")(function* () {
-      return Array.from(sessions.values()).map((session) => session.info)
+    const list = Effect.fn("Pty.list")(function* (filter?: { readonly sessionID?: string }) {
+      const all = Array.from(sessions.values()).map((session) => session.info)
+      if (filter?.sessionID === undefined) return all
+      return all.filter((info) => info.sessionID === filter.sessionID)
     })
 
     const get = Effect.fn("Pty.get")(function* (id: PtyID) {
@@ -188,6 +190,7 @@ const layer = Layer.effect(
         cwd,
         status: "running",
         pid: proc.pid,
+        sessionID: input.sessionID,
       }
       const session: Active = {
         info,

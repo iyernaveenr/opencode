@@ -1,6 +1,7 @@
 import { Pty } from "@opencode-ai/schema/pty"
 import { PtyTicket } from "@opencode-ai/schema/pty-ticket"
 import { Location } from "@opencode-ai/schema/location"
+import { SessionID } from "@opencode-ai/schema/session-id"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
 import { ForbiddenError, PtyNotFoundError } from "../errors.js"
@@ -9,6 +10,14 @@ import { LocationQuery, locationQueryOpenApi } from "./location.js"
 export const PTY_CONNECT_TICKET_QUERY = "ticket"
 export const PTY_CONNECT_TOKEN_HEADER = "x-opencode-ticket"
 export const PTY_CONNECT_TOKEN_HEADER_VALUE = "1"
+export const PTY_SESSION_QUERY = "sessionID"
+
+// A caller may claim the chat session it acts for; owned PTYs are then only visible to
+// their owning session. Without a claim, legacy workspace-wide behavior applies.
+const SessionQuery = Schema.Struct({
+  ...LocationQuery.fields,
+  [PTY_SESSION_QUERY]: Schema.optional(SessionID),
+}).annotate({ identifier: "PtySessionQuery" })
 
 const PTY_CONNECT_PATH = /^\/api\/pty\/[^/]+\/connect$/
 
@@ -21,7 +30,7 @@ export function hasPtyConnectTicketURL(url: URL) {
 export const PtyGroup = HttpApiGroup.make("server.pty")
   .add(
     HttpApiEndpoint.get("pty.list", "/api/pty", {
-      query: LocationQuery,
+      query: SessionQuery,
       success: Location.response(Schema.Array(Pty.Info)),
     })
       .annotateMerge(locationQueryOpenApi)
@@ -51,7 +60,7 @@ export const PtyGroup = HttpApiGroup.make("server.pty")
   .add(
     HttpApiEndpoint.get("pty.get", "/api/pty/:ptyID", {
       params: { ptyID: Pty.ID },
-      query: LocationQuery,
+      query: SessionQuery,
       success: Location.response(Pty.Info),
       error: PtyNotFoundError,
     })
@@ -67,7 +76,7 @@ export const PtyGroup = HttpApiGroup.make("server.pty")
   .add(
     HttpApiEndpoint.put("pty.update", "/api/pty/:ptyID", {
       params: { ptyID: Pty.ID },
-      query: LocationQuery,
+      query: SessionQuery,
       payload: Pty.UpdateInput,
       success: Location.response(Pty.Info),
       error: PtyNotFoundError,
@@ -84,7 +93,7 @@ export const PtyGroup = HttpApiGroup.make("server.pty")
   .add(
     HttpApiEndpoint.delete("pty.remove", "/api/pty/:ptyID", {
       params: { ptyID: Pty.ID },
-      query: LocationQuery,
+      query: SessionQuery,
       success: HttpApiSchema.NoContent,
       error: PtyNotFoundError,
     })
@@ -100,7 +109,7 @@ export const PtyGroup = HttpApiGroup.make("server.pty")
   .add(
     HttpApiEndpoint.post("pty.connectToken", "/api/pty/:ptyID/connect-token", {
       params: { ptyID: Pty.ID },
-      query: LocationQuery,
+      query: SessionQuery,
       headers: Schema.Struct({ [PTY_CONNECT_TOKEN_HEADER]: Schema.optional(Schema.String) }),
       success: Location.response(PtyTicket.ConnectToken),
       error: [ForbiddenError, PtyNotFoundError],
@@ -131,11 +140,13 @@ export const PtyGroup = HttpApiGroup.make("server.pty")
           "x-websocket": true,
           parameters: [
             ...(operation.parameters ?? []),
-            ...["location[directory]", "location[workspace]", "cursor", PTY_CONNECT_TICKET_QUERY].map((name) => ({
-              in: "query",
-              name,
-              schema: { type: "string" },
-            })),
+            ...["location[directory]", "location[workspace]", "cursor", PTY_CONNECT_TICKET_QUERY, PTY_SESSION_QUERY].map(
+              (name) => ({
+                in: "query",
+                name,
+                schema: { type: "string" },
+              }),
+            ),
           ],
         }),
       }),

@@ -52,7 +52,7 @@ export function TerminalPanel(
   const sdk = useWorkspaceLocation()
   const language = useLanguage()
   const command = useCommand()
-  const { workspaceKey, view } = useSessionLayout()
+  const { workspaceKey, sessionKey, view } = useSessionLayout()
 
   const isDesktop = createMediaQuery("(min-width: 768px)")
   const opened = createMemo(() => view().terminal.opened())
@@ -108,7 +108,8 @@ export function TerminalPanel(
       return
     }
 
-    const workspace = workspaceKey()
+    // Terminal stores are session-owned, so the auto-create marker must be too.
+    const workspace = sessionKey()
     if (!terminal.ready() || terminal.all().length !== 0 || store.autoCreated === workspace) return
     terminal.new()
     setStore("autoCreated", workspace)
@@ -116,9 +117,10 @@ export function TerminalPanel(
 
   createEffect(
     on(
-      () => [workspaceKey(), terminal.all().length] as const,
-      ([workspace, count], previous) => {
-        if (!previous || previous[0] !== workspace || previous[1] <= 0 || count !== 0) return
+      () => [sessionKey(), terminal.all().length] as const,
+      ([session, count], previous) => {
+        // A session switch swaps the whole store; only a real count drop within one session closes the pane.
+        if (!previous || previous[0] !== session || previous[1] <= 0 || count !== 0) return
         if (!opened()) return
         close()
       },

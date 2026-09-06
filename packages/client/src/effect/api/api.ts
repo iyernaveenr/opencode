@@ -1625,6 +1625,7 @@ export interface EventApi<E = never> {
 
 export type PtyListInput = {
   readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  readonly sessionID?: Session.ID | undefined
 }
 export type PtyListOutput = { readonly location: Location.Info; readonly data: ReadonlyArray<Pty.Info> }
 export type PtyListOperation<E = never> = (input?: PtyListInput) => Effect.Effect<PtyListOutput, E>
@@ -1636,6 +1637,7 @@ export type PtyCreateInput = {
   readonly cwd?: string | undefined
   readonly title?: string | undefined
   readonly env?: { readonly [x: string]: string } | undefined
+  readonly sessionID?: Session.ID | undefined
 }
 export type PtyCreateOutput = { readonly location: Location.Info; readonly data: Pty.Info }
 export type PtyCreateOperation<E = never> = (input?: PtyCreateInput) => Effect.Effect<PtyCreateOutput, E>
@@ -1643,6 +1645,7 @@ export type PtyCreateOperation<E = never> = (input?: PtyCreateInput) => Effect.E
 export type PtyGetInput = {
   readonly ptyID: Pty.ID
   readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  readonly sessionID?: Session.ID | undefined
 }
 export type PtyGetOutput = { readonly location: Location.Info; readonly data: Pty.Info }
 export type PtyGetOperation<E = never> = (input: PtyGetInput) => Effect.Effect<PtyGetOutput, E>
@@ -1650,6 +1653,7 @@ export type PtyGetOperation<E = never> = (input: PtyGetInput) => Effect.Effect<P
 export type PtyUpdateInput = {
   readonly ptyID: Pty.ID
   readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  readonly sessionID?: Session.ID | undefined
   readonly title?: string | undefined
   readonly size?: { readonly rows: number; readonly cols: number } | undefined
 }
@@ -1659,6 +1663,7 @@ export type PtyUpdateOperation<E = never> = (input: PtyUpdateInput) => Effect.Ef
 export type PtyRemoveInput = {
   readonly ptyID: Pty.ID
   readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  readonly sessionID?: Session.ID | undefined
 }
 export type PtyRemoveOutput = void
 export type PtyRemoveOperation<E = never> = (input: PtyRemoveInput) => Effect.Effect<PtyRemoveOutput, E>
@@ -1666,6 +1671,7 @@ export type PtyRemoveOperation<E = never> = (input: PtyRemoveInput) => Effect.Ef
 export type PtyConnectTokenInput = {
   readonly ptyID: Pty.ID
   readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  readonly sessionID?: Session.ID | undefined
   readonly "x-opencode-ticket"?: string | undefined
 }
 export type PtyConnectTokenOutput = { readonly location: Location.Info; readonly data: PtyTicket.ConnectToken }

@@ -1671,7 +1671,7 @@ export function make(options: ClientOptions) {
           {
             method: "GET",
             path: `/api/pty`,
-            query: { location: input?.["location"] },
+            query: { location: input?.["location"], sessionID: input?.["sessionID"] },
             successStatus: 200,
             declaredStatuses: [400, 401],
             empty: false,
@@ -1690,6 +1690,7 @@ export function make(options: ClientOptions) {
               cwd: input?.["cwd"],
               title: input?.["title"],
               env: input?.["env"],
+              sessionID: input?.["sessionID"],
             },
             successStatus: 200,
             declaredStatuses: [400, 401],
@@ -1702,7 +1703,7 @@ export function make(options: ClientOptions) {
           {
             method: "GET",
             path: `/api/pty/${encodeURIComponent(input.ptyID)}`,
-            query: { location: input["location"] },
+            query: { location: input["location"], sessionID: input["sessionID"] },
             successStatus: 200,
             declaredStatuses: [400, 401, 404],
             empty: false,
@@ -1714,7 +1715,7 @@ export function make(options: ClientOptions) {
           {
             method: "PUT",
             path: `/api/pty/${encodeURIComponent(input.ptyID)}`,
-            query: { location: input["location"] },
+            query: { location: input["location"], sessionID: input["sessionID"] },
             body: { title: input["title"], size: input["size"] },
             successStatus: 200,
             declaredStatuses: [400, 401, 404],
@@ -1727,7 +1728,7 @@ export function make(options: ClientOptions) {
           {
             method: "DELETE",
             path: `/api/pty/${encodeURIComponent(input.ptyID)}`,
-            query: { location: input["location"] },
+            query: { location: input["location"], sessionID: input["sessionID"] },
             successStatus: 204,
             declaredStatuses: [400, 401, 404],
             empty: true,
@@ -1740,7 +1741,7 @@ export function make(options: ClientOptions) {
             {
               method: "POST",
               path: `/api/pty/${encodeURIComponent(input.ptyID)}/connect-token`,
-              query: { location: input["location"] },
+              query: { location: input["location"], sessionID: input["sessionID"] },
               headers: { "x-opencode-ticket": input["x-opencode-ticket"] },
               successStatus: 200,
               declaredStatuses: [400, 401, 403, 404],

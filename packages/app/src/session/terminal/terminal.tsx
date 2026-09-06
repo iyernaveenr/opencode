@@ -6,6 +6,7 @@ import type { HexColor, ResolvedV2Theme } from "@opencode-ai/ui/theme/types"
 import { showToast } from "@/shell/notifications/toast"
 import type { FitAddon, Ghostty, Terminal as Term } from "ghostty-web"
 import { type ComponentProps, createEffect, createMemo, onCleanup, onMount, splitProps } from "solid-js"
+import { useParams } from "@solidjs/router"
 import { SerializeAddon } from "@/session/terminal/serialize"
 import { matchKeybind, parseKeybind } from "@/shell/commands/command"
 import { useLanguage } from "@/runtime/i18n/language"
@@ -16,6 +17,7 @@ import { terminalFontFamily, useSettings } from "@/settings/model"
 import type { LocalPTY } from "@/session/terminal/context"
 import { disposeIfDisposable, getHoveredLinkText, setOptionIfSupported } from "@/session/terminal/runtime-adapters"
 import { terminalKeyInput } from "@/session/terminal/terminal-key-event"
+import { initialReplayCursor } from "@/session/terminal/replay"
 import { terminalWriter } from "@/session/terminal/writer"
 
 const TOGGLE_TERMINAL_ID = "terminal.toggle"
@@ -176,6 +178,8 @@ export const Terminal = (props: TerminalProps) => {
   const settings = useSettings()
   const theme = useTheme()
   const language = useLanguage()
+  // Claim the owning chat session on connect so the server can enforce PTY ownership.
+  const ownerSessionID = useParams().id
   // Intentional mount-time capture: the imperative xterm/WebSocket lifecycle needs stable values, and Terminal remounts when the SDK scope changes.
   const directory = sdk().directory
   let container!: HTMLDivElement
@@ -216,7 +220,7 @@ export const Terminal = (props: TerminalProps) => {
   const start =
     typeof local.pty.cursor === "number" && Number.isSafeInteger(local.pty.cursor) ? local.pty.cursor : undefined
   let cursor = start ?? 0
-  let seek = start !== undefined ? start : restore ? -1 : 0
+  let seek = initialReplayCursor(start, restore !== "")
   let output: ReturnType<typeof terminalWriter> | undefined
   let drop: VoidFunction | undefined
   let reconn: ReturnType<typeof setTimeout> | undefined
@@ -573,6 +577,7 @@ export const Terminal = (props: TerminalProps) => {
             ptyID: id,
             location: { directory },
             cursor: seek,
+            sessionID: ownerSessionID,
           })
           .catch((err) => {
             fail(err)

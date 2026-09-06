@@ -340,6 +340,7 @@ export type Pty = {
   status: "running" | "exited"
   pid: number
   exitCode?: number
+  sessionID?: string
 }
 
 export type PersistentPtyInfo = {
@@ -5758,7 +5759,12 @@ export type EventSubscribeOutput = V2Event
 export type PtyListInput = {
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly sessionID?: string | undefined
   }["location"]
+  readonly sessionID?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly sessionID?: string | undefined
+  }["sessionID"]
 }
 
 export type PtyListOutput = {
@@ -5776,6 +5782,7 @@ export type PtyCreateInput = {
     readonly cwd?: string
     readonly title?: string
     readonly env?: { readonly [x: string]: string }
+    readonly sessionID?: string
   }["command"]
   readonly args?: {
     readonly command?: string
@@ -5783,6 +5790,7 @@ export type PtyCreateInput = {
     readonly cwd?: string
     readonly title?: string
     readonly env?: { readonly [x: string]: string }
+    readonly sessionID?: string
   }["args"]
   readonly cwd?: {
     readonly command?: string
@@ -5790,6 +5798,7 @@ export type PtyCreateInput = {
     readonly cwd?: string
     readonly title?: string
     readonly env?: { readonly [x: string]: string }
+    readonly sessionID?: string
   }["cwd"]
   readonly title?: {
     readonly command?: string
@@ -5797,6 +5806,7 @@ export type PtyCreateInput = {
     readonly cwd?: string
     readonly title?: string
     readonly env?: { readonly [x: string]: string }
+    readonly sessionID?: string
   }["title"]
   readonly env?: {
     readonly command?: string
@@ -5804,7 +5814,16 @@ export type PtyCreateInput = {
     readonly cwd?: string
     readonly title?: string
     readonly env?: { readonly [x: string]: string }
+    readonly sessionID?: string
   }["env"]
+  readonly sessionID?: {
+    readonly command?: string
+    readonly args?: ReadonlyArray<string>
+    readonly cwd?: string
+    readonly title?: string
+    readonly env?: { readonly [x: string]: string }
+    readonly sessionID?: string
+  }["sessionID"]
 }
 
 export type PtyCreateOutput = {
@@ -5816,7 +5835,12 @@ export type PtyGetInput = {
   readonly ptyID: { readonly ptyID: string }["ptyID"]
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly sessionID?: string | undefined
   }["location"]
+  readonly sessionID?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly sessionID?: string | undefined
+  }["sessionID"]
 }
 
 export type PtyGetOutput = {
@@ -5828,7 +5852,12 @@ export type PtyUpdateInput = {
   readonly ptyID: { readonly ptyID: string }["ptyID"]
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly sessionID?: string | undefined
   }["location"]
+  readonly sessionID?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly sessionID?: string | undefined
+  }["sessionID"]
   readonly title?: {
     readonly title?: string
     readonly size?: { readonly rows: number; readonly cols: number }
@@ -5845,7 +5874,12 @@ export type PtyRemoveInput = {
   readonly ptyID: { readonly ptyID: string }["ptyID"]
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly sessionID?: string | undefined
   }["location"]
+  readonly sessionID?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly sessionID?: string | undefined
+  }["sessionID"]
 }
 
 export type PtyRemoveOutput = void
@@ -5854,7 +5888,12 @@ export type PtyConnectTokenInput = {
   readonly ptyID: { readonly ptyID: string }["ptyID"]
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly sessionID?: string | undefined
   }["location"]
+  readonly sessionID?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly sessionID?: string | undefined
+  }["sessionID"]
   readonly "x-opencode-ticket"?: { readonly "x-opencode-ticket"?: string | undefined }["x-opencode-ticket"]
 }
 
