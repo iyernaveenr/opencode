@@ -1,4 +1,4 @@
-import { Effect, Layer, LayerMap } from "effect"
+import { Duration, Effect, Layer, LayerMap } from "effect"
 import { AgentV2 } from "./agent"
 import { AISDK } from "./aisdk"
 import { Catalog } from "./catalog"
@@ -106,7 +106,8 @@ export function buildLocationServiceMap(
           Layer.provide(LayerNode.compile(location.hoisted)),
         )
       },
-      { idleTimeToLive: "60 minutes" },
+      // Idle release tears down every running terminal in the location (Pty finalizer).
+      { idleTimeToLive: Duration.infinity },
     ),
   )
 }
