@@ -372,6 +372,9 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
               })
             continue
           }
+          // A retried stream leaves its aborted attempt behind as a step holding only an
+          // empty reasoning part; replayed alone it is an assistant message without content.
+          if (part.text.trim().length === 0 && Object.keys(part.metadata ?? {}).length === 0) continue
           assistantMessage.parts.push({
             type: "reasoning",
             text: part.text,

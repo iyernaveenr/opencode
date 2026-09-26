@@ -1169,6 +1169,135 @@ describe("session.message-v2.toModelMessage", () => {
     expect(await MessageV2.toModelMessages(input, model)).toStrictEqual([])
   })
 
+  test("drops the empty reasoning stub a retried stream leaves in its own step", async () => {
+    const assistantID = "m-assistant"
+
+    const input: SessionV1.WithParts[] = [
+      {
+        info: assistantInfo(assistantID, "m-parent"),
+        parts: [
+          {
+            ...basePart(assistantID, "p1"),
+            type: "step-start",
+          },
+          {
+            ...basePart(assistantID, "p2"),
+            type: "reasoning",
+            text: "",
+            time: { start: 0 },
+          },
+          {
+            ...basePart(assistantID, "p3"),
+            type: "step-start",
+          },
+          {
+            ...basePart(assistantID, "p4"),
+            type: "reasoning",
+            text: "thinking",
+            time: { start: 1, end: 2 },
+          },
+          {
+            ...basePart(assistantID, "p5"),
+            type: "text",
+            text: "answer",
+          },
+        ] as SessionV1.Part[],
+      },
+    ]
+
+    expect(await MessageV2.toModelMessages(input, model)).toStrictEqual([
+      {
+        role: "assistant",
+        content: [
+          { type: "reasoning", text: "thinking", providerOptions: undefined },
+          { type: "text", text: "answer" },
+        ],
+      },
+    ])
+  })
+
+  test("keeps empty reasoning that carries provider metadata", async () => {
+    const assistantID = "m-assistant"
+
+    const input: SessionV1.WithParts[] = [
+      {
+        info: assistantInfo(assistantID, "m-parent"),
+        parts: [
+          {
+            ...basePart(assistantID, "p1"),
+            type: "reasoning",
+            text: "",
+            metadata: { openai: { reasoningEncryptedContent: "enc" } },
+            time: { start: 0, end: 1 },
+          },
+          {
+            ...basePart(assistantID, "p2"),
+            type: "text",
+            text: "answer",
+          },
+        ] as SessionV1.Part[],
+      },
+    ]
+
+    expect(await MessageV2.toModelMessages(input, model)).toStrictEqual([
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "reasoning",
+            text: "",
+            providerOptions: { openai: { reasoningEncryptedContent: "enc" } },
+          },
+          { type: "text", text: "answer" },
+        ],
+      },
+    ])
+  })
+
+  test("replays a retried interleaved-reasoning turn without an empty assistant message", async () => {
+    const assistantID = "m-assistant"
+    const kimi: Provider.Model = {
+      ...model,
+      id: ModelV2.ID.make("kimi-k3"),
+      providerID: ProviderV2.ID.make("moonshotai"),
+      api: { id: "kimi-k3", url: "https://api.moonshot.ai/v1", npm: "@ai-sdk/openai-compatible" },
+      capabilities: { ...model.capabilities, reasoning: true, interleaved: { field: "reasoning_content" } },
+    }
+
+    const input: SessionV1.WithParts[] = [
+      {
+        info: assistantInfo(assistantID, "m-parent", undefined, { providerID: kimi.providerID, modelID: kimi.id }),
+        parts: [
+          { ...basePart(assistantID, "p1"), type: "step-start" },
+          { ...basePart(assistantID, "p2"), type: "reasoning", text: "", time: { start: 0 } },
+          { ...basePart(assistantID, "p3"), type: "step-start" },
+          { ...basePart(assistantID, "p4"), type: "reasoning", text: "thinking", time: { start: 1, end: 2 } },
+          { ...basePart(assistantID, "p5"), type: "text", text: "running it" },
+          {
+            ...basePart(assistantID, "p6"),
+            type: "tool",
+            callID: "call-1",
+            tool: "bash",
+            state: {
+              status: "completed",
+              input: { cmd: "ls" },
+              output: "ok",
+              title: "Bash",
+              metadata: {},
+              time: { start: 0, end: 1 },
+            },
+          },
+        ] as SessionV1.Part[],
+      },
+    ]
+
+    const msgs = ProviderTransform.message(await MessageV2.toModelMessages(input, kimi), kimi, {})
+    const assistants = msgs.filter((msg) => msg.role === "assistant")
+    expect(assistants).toHaveLength(1)
+    expect(assistants[0].content).toHaveLength(2)
+    expect(assistants[0].providerOptions?.openaiCompatible).toEqual({ reasoning_content: "thinking" })
+  })
+
   test("converts pending/running tool calls to error results to prevent dangling tool_use", async () => {
     const userID = "m-user"
     const assistantID = "m-assistant"
