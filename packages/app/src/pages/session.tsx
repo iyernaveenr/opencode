@@ -57,9 +57,12 @@ import { ServerConnection, serverName, useServer } from "@/context/server"
 import { useSettings } from "@/context/settings"
 import { useSync } from "@/context/sync"
 import { useTabs } from "@/context/tabs"
+import { tabGroupColor } from "@/utils/tab-groups"
 import { TerminalProvider, useTerminal } from "@/context/terminal"
 import { PromptInput } from "@/components/prompt-input"
 import { PromptInputV2Composer, usePromptInputV2Controller } from "@/components/prompt-input-v2"
+import { TabGroupHint } from "@/components/tab-group-hint"
+import { useBroadcastQueue } from "@/context/broadcast-queue"
 import { useSettingsCommand } from "@/components/settings-dialog"
 import { setCursorPosition } from "@/components/prompt-input/editor-dom"
 import { promptLength } from "@/components/prompt-input/history"
@@ -1785,6 +1788,34 @@ export default function Page() {
 
   const followupDock = createMemo(() => queuedFollowups().map((item) => ({ id: item.id, text: followupText(item) })))
 
+  // Prompts held for this session (plain sends and group sends alike) share the follow-up dock,
+  // oldest first; group sends carry their group's colour. Edit pulls one back into the composer.
+  const broadcastQueue = useBroadcastQueue()
+  const currentServer = useServer()
+  const tabGroups = useTabs()
+  const groupQueue = createMemo(() => {
+    const id = params.id
+    if (!id) return []
+    return broadcastQueue.pending().filter((item) => item.tab.sessionId === id && item.tab.server === currentServer.key)
+  })
+  const groupQueueDock = createMemo(() =>
+    groupQueue().map((item) => {
+      const group = item.group ? tabGroups.groups[item.group] : undefined
+      return {
+        id: item.id,
+        text: item.text,
+        marker: group ? { color: tabGroupColor(group.color), label: group.name } : undefined,
+      }
+    }),
+  )
+  const editGroupQueueItem = (id: string) => {
+    const sessionID = params.id
+    const item = groupQueue().find((entry) => entry.id === id)
+    if (!sessionID || !item) return
+    broadcastQueue.remove(id)
+    setFollowup("edit", sessionID, { id: item.id, prompt: item.draft.prompt, context: item.draft.context })
+  }
+
   const sendFollowup = (sessionID: string, id: string, opts?: { manual?: boolean }) => {
     if (sync().session.get(sessionID)?.parentID) return Promise.resolve()
     const item = (followup.items[sessionID] ?? []).find((entry) => entry.id === id)
@@ -2144,10 +2175,16 @@ export default function Page() {
             followup: () =>
               params.id && !isChildSession()
                 ? {
-                    items: followupDock(),
+                    items: [...followupDock(), ...groupQueueDock()],
                     sending: sendingFollowup(),
-                    onSend: (id) => void sendFollowup(params.id!, id, { manual: true }),
-                    onEdit: editFollowup,
+                    onSend: (id) => {
+                      if (groupQueue().some((item) => item.id === id)) return broadcastQueue.send(id)
+                      void sendFollowup(params.id!, id, { manual: true })
+                    },
+                    onEdit: (id) => {
+                      if (groupQueue().some((item) => item.id === id)) return editGroupQueueItem(id)
+                      editFollowup(id)
+                    },
                   }
                 : undefined,
             revert: () =>
@@ -2179,6 +2216,7 @@ export default function Page() {
           return (
             <SessionComposerRegion
               controller={controller}
+              above={<TabGroupHint />}
               promptInput={
                 <Show
                   when={newSessionDesign()}
@@ -2234,7 +2272,11 @@ export default function Page() {
                         setFollowup("paused", id, true)
                       },
                     })
-                    return <PromptInputV2Composer controller={controller} borderUnderlay />
+                    return (
+                      <>
+                        <PromptInputV2Composer controller={controller} borderUnderlay />
+                      </>
+                    )
                   }}
                 </Show>
               }

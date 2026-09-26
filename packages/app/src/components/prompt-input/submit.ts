@@ -4,7 +4,10 @@ import { base64Encode } from "@opencode-ai/core/util/encode"
 import { Binary } from "@opencode-ai/core/util/binary"
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router"
 import { batch, startTransition, type Accessor } from "solid-js"
-import { useTabs } from "@/context/tabs"
+import { tabKey, useTabs, type SessionTab } from "@/context/tabs"
+import { useBroadcastQueue } from "@/context/broadcast-queue"
+import { useGlobal } from "@/context/global"
+import { ServerConnection, useServer } from "@/context/server"
 import { useServerSync, type ServerSync } from "@/context/server-sync"
 import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
@@ -244,7 +247,110 @@ export function createPromptSubmit(input: PromptSubmitInput) {
   const params = useParams()
   const [search] = useSearchParams<{ draftId?: string }>()
   const tabs = useTabs()
+  const global = useGlobal()
+  const server = useServer()
+  const queue = useBroadcastQueue()
   const pendingKey = (sessionID: string) => ScopedKey.from(sdk().scope, sessionID)
+
+  const broadcastTargets = (): SessionTab[] => {
+    const id = params.id
+    if (!id) return []
+    const current: SessionTab = { type: "session", server: server.key, sessionId: id }
+    const group = tabs.groupOf(current)
+    if (!group) return []
+    return tabs.groupMembers(group.id).filter((tab) => tabKey(tab) !== tabKey(current))
+  }
+
+  type Ctx = ReturnType<typeof global.ensureServerCtx>
+  const titleOf = (tab: SessionTab, info?: Session) => tabs.info[tabKey(tab)]?.title ?? info?.title ?? tab.sessionId
+  const connectionFor = (tab: SessionTab) =>
+    global.servers.list().find((item) => ServerConnection.key(item) === tab.server)
+
+  // Sends a draft to a session. Group targets keep their own agent and model; a prompt held in
+  // its own session keeps what the composer had selected when it was typed.
+  const deliver = (ctx: Ctx, info: Session, draft: FollowupDraft, selection: "session" | "draft") => {
+    const directory = info.directory
+    return sendFollowupDraft({
+      api: ctx.sdk.ensureDirSdkContext(directory).api.session,
+      serverSync: ctx.sync,
+      sync: ctx.sync.ensureDirSyncContext(directory),
+      draft:
+        selection === "draft"
+          ? { ...draft, sessionID: info.id, sessionDirectory: directory }
+          : {
+              ...draft,
+              sessionID: info.id,
+              sessionDirectory: directory,
+              agent: info.agent ?? draft.agent,
+              model: info.model ? { providerID: info.model.providerID, modelID: info.model.id } : draft.model,
+              variant: info.model ? info.model.variant : draft.variant,
+            },
+      optimisticBusy: true,
+    })
+  }
+
+  // Holds a draft for a session that is still answering; the queue delivers it after that turn.
+  const hold = (ctx: Ctx, tab: SessionTab, info: Session, draft: FollowupDraft, group?: string) => {
+    const selection = group === undefined ? "draft" : "session"
+    queue.enqueue({
+      id: Identifier.ascending("message"),
+      tab,
+      group,
+      title: titleOf(tab, info),
+      draft,
+      text: draft.prompt.map((part) => ("content" in part ? part.content : "")).join(""),
+      // A target's model or agent may change before its turn ends; read them at delivery time.
+      send: () => deliver(ctx, ctx.sync.session.peek(info.id) ?? info, draft, selection).then(() => undefined),
+    })
+  }
+
+  // Every target keeps its own directory, agent and model; only the prompt is shared.
+  const broadcast = async (draft: FollowupDraft, targets: SessionTab[]) => {
+    const sent: string[] = []
+    const queued: string[] = []
+    const failed: string[] = []
+    await Promise.all(
+      targets.map(async (tab) => {
+        const conn = connectionFor(tab)
+        if (!conn) {
+          failed.push(titleOf(tab))
+          return
+        }
+        const ctx = global.ensureServerCtx(conn)
+        const info =
+          ctx.sync.session.peek(tab.sessionId) ?? (await ctx.sync.session.resolve(tab.sessionId).catch(() => undefined))
+        if (!info) {
+          failed.push(titleOf(tab))
+          return
+        }
+        const group = tabs.groupOf(tab)
+        const status = ctx.sync.session.data.session_status[info.id]?.type ?? "idle"
+        if (status !== "idle" && group) {
+          hold(ctx, tab, info, draft, group.id)
+          queued.push(titleOf(tab, info))
+          return
+        }
+        await deliver(ctx, info, draft, "session")
+          .then(() => {
+            sent.push(titleOf(tab, info))
+          })
+          .catch(() => {
+            failed.push(titleOf(tab, info))
+          })
+      }),
+    )
+    // The toast renders its description on one line, so every bucket carries its own label.
+    const details = [
+      sent.length ? language.t("prompt.toast.broadcast.sent", { titles: sent.join(", ") }) : "",
+      queued.length ? language.t("prompt.toast.broadcast.queued", { titles: queued.join(", ") }) : "",
+      failed.length ? language.t("prompt.toast.broadcast.failed", { titles: failed.join(", ") }) : "",
+    ].filter((line) => line !== "")
+    showToast({
+      variant: failed.length ? "error" : undefined,
+      title: language.t("prompt.toast.broadcast.title"),
+      description: details.join(". "),
+    })
+  }
 
   const errorMessage = (err: unknown) => {
     if (err && typeof err === "object" && "message" in err && typeof err.message === "string") return err.message
@@ -315,7 +421,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     })
   }
 
-  const handleSubmit = async (event: Event) => {
+  const handleSubmit = async (event: Event, options?: { broadcast?: boolean }) => {
     event.preventDefault()
 
     const target = prompt.capture()
@@ -486,6 +592,31 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       return
     }
 
+    // While this session is answering, Enter holds the prompt for after the turn instead of
+    // steering into it; a group send holds the originating tab the same way.
+    const groupTargets = options?.broadcast ? broadcastTargets() : []
+    const current: SessionTab = { type: "session", server: server.key, sessionId: session.id }
+    const conn = connectionFor(current)
+    const currentCtx = conn ? global.ensureServerCtx(conn) : undefined
+    const currentInfo = currentCtx?.sync.session.peek(session.id)
+    if (
+      currentCtx &&
+      currentInfo &&
+      !isNewSession &&
+      mode === "normal" &&
+      !text.startsWith("/") &&
+      (serverSync().session.data.session_status[session.id]?.type ?? "idle") !== "idle"
+    ) {
+      clearContext(submission.target())
+      clearInput()
+      if (groupTargets.length > 0) {
+        void broadcast(draft, [current, ...groupTargets])
+        return
+      }
+      hold(currentCtx, current, currentInfo, draft)
+      return
+    }
+
     input.onSubmit?.()
 
     if (mode === "shell") {
@@ -636,10 +767,15 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       removeOptimisticMessage()
       if (restoreInput()) restoreCommentItems(submission.target(), commentItems)
     })
+
+    if (options?.broadcast) {
+      if (groupTargets.length > 0) void broadcast(draft, groupTargets)
+    }
   }
 
   return {
     abort,
     handleSubmit,
+    broadcastTargets,
   }
 }

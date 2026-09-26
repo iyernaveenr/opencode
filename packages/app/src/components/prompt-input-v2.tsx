@@ -435,6 +435,14 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
       disabled: controller.state.mode === "normal",
       onSelect: () => controller.dispatch({ type: "mode.normal" }),
     },
+    {
+      id: "prompt.broadcast",
+      title: language.t("command.prompt.broadcast"),
+      category: language.t("command.category.session"),
+      keybind: "mod+shift+enter",
+      disabled: controller.state.mode !== "normal" || submission.broadcastTargets().length === 0,
+      onSelect: () => void submission.handleSubmit(new Event("submit"), { broadcast: true }),
+    },
   ])
 
   createEffect(

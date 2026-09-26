@@ -11,6 +11,8 @@ import type { SessionComposerRegionController } from "./session-composer-region-
 export function SessionComposerRegion(props: {
   controller: SessionComposerRegionController
   promptInput: JSX.Element
+  // Rendered above the docks; the follow-up tray overlaps whatever sits directly on the composer.
+  above?: JSX.Element
 }) {
   const language = useLanguage()
   const controller = props.controller
@@ -131,6 +133,7 @@ export function SessionComposerRegion(props: {
                 "margin-top": `${-controller.lift()}px`,
               }}
             >
+              {props.above}
               <Show when={controller.followup()?.items.length}>
                 <SessionFollowupDock
                   items={controller.followup()!.items}

@@ -174,6 +174,8 @@ export const dict = {
   "command.model.variant.cycle.description": "สลับไปยังระดับความพยายามถัดไป",
   "command.prompt.mode.shell": "เชลล์",
   "command.prompt.mode.normal": "พรอมต์",
+  "command.prompt.broadcast": "ส่งไปยังกลุ่มแท็บ",
+  "command.tab.group": "กลุ่มแท็บ...",
   "command.permissions.autoaccept.enable": "ยอมรับสิทธิ์โดยอัตโนมัติ",
   "command.permissions.autoaccept.disable": "หยุดยอมรับสิทธิ์โดยอัตโนมัติ",
   "command.workspace.toggle": "สลับพื้นที่ทำงาน",
@@ -414,6 +416,11 @@ export const dict = {
   "prompt.toast.commandSendFailed.title": "ไม่สามารถส่งคำสั่ง",
   "prompt.toast.promptSendFailed.title": "ไม่สามารถส่งพรอมต์",
   "prompt.toast.promptSendFailed.description": "ไม่สามารถดึงเซสชันได้",
+  "prompt.toast.broadcast.title": "ส่งไปยังกลุ่มแท็บแล้ว",
+  "prompt.toast.broadcast.sent": "ส่งแล้ว: {{titles}}",
+  "prompt.toast.broadcast.queued": "ไม่ว่าง เข้าคิวแล้ว: {{titles}}",
+  "prompt.toast.broadcast.failed": "ล้มเหลว: {{titles}}",
+  "tabGroup.hint": "{{name}}: {{count}} แท็บ {{keybind}} ส่งถึงทั้งหมด",
 
   "dialog.mcp.title": "MCPs",
   "dialog.mcp.description": "{{enabled}} จาก {{total}} ที่เปิดใช้งาน",
@@ -429,6 +436,11 @@ export const dict = {
   "mcp.status.disabled": "ปิดใช้งาน",
 
   "dialog.fork.empty": "ไม่มีข้อความให้แตกแขนง",
+  "dialog.tabGroup.title": "กลุ่มแท็บ",
+  "dialog.tabGroup.search.placeholder": "ค้นหาหรือสร้างกลุ่ม",
+  "dialog.tabGroup.create": 'สร้างกลุ่ม "{{name}}"',
+  "dialog.tabGroup.remove": "นำออกจากกลุ่ม",
+  "dialog.tabGroup.members": "{{count}} ในกลุ่ม",
 
   "dialog.directory.search.placeholder": "ค้นหาโฟลเดอร์",
   "dialog.directory.empty": "ไม่พบโฟลเดอร์",

@@ -75,6 +75,8 @@ export const dict = {
   "command.model.variant.cycle.description": "Skift til næste indsatsniveau",
   "command.prompt.mode.shell": "Shell",
   "command.prompt.mode.normal": "Prompt",
+  "command.prompt.broadcast": "Send til fanegruppe",
+  "command.tab.group": "Fanegruppe...",
   "command.permissions.autoaccept.enable": "Accepter tilladelser automatisk",
   "command.permissions.autoaccept.disable": "Stop med at acceptere tilladelser automatisk",
   "command.workspace.toggle": "Skift arbejdsområder",
@@ -314,6 +316,11 @@ export const dict = {
   "prompt.toast.commandSendFailed.title": "Kunne ikke sende kommando",
   "prompt.toast.promptSendFailed.title": "Kunne ikke sende forespørgsel",
   "prompt.toast.promptSendFailed.description": "Kunne ikke hente session",
+  "prompt.toast.broadcast.title": "Sendt til fanegruppen",
+  "prompt.toast.broadcast.sent": "Sendt: {{titles}}",
+  "prompt.toast.broadcast.queued": "Optaget, sat i kø: {{titles}}",
+  "prompt.toast.broadcast.failed": "Mislykkedes: {{titles}}",
+  "tabGroup.hint": "{{name}}: {{count}} faner. {{keybind}} sender til alle",
 
   "dialog.mcp.title": "MCP'er",
   "dialog.mcp.description": "{{enabled}} af {{total}} aktiveret",
@@ -329,6 +336,11 @@ export const dict = {
   "mcp.status.disabled": "deaktiveret",
 
   "dialog.fork.empty": "Ingen beskeder at forgrene fra",
+  "dialog.tabGroup.title": "Fanegruppe",
+  "dialog.tabGroup.search.placeholder": "Find eller opret en gruppe",
+  "dialog.tabGroup.create": 'Opret gruppen "{{name}}"',
+  "dialog.tabGroup.remove": "Fjern fra gruppen",
+  "dialog.tabGroup.members": "{{count}} i gruppen",
 
   "dialog.directory.search.placeholder": "Søg mapper",
   "dialog.directory.empty": "Ingen mapper fundet",

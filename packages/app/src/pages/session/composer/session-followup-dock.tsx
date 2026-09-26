@@ -6,7 +6,7 @@ import { IconButton } from "@opencode-ai/ui/icon-button"
 import { useLanguage } from "@/context/language"
 
 export function SessionFollowupDock(props: {
-  items: { id: string; text: string }[]
+  items: { id: string; text: string; marker?: { color: string; label: string } }[]
   sending?: string
   onSend: (id: string) => void
   onEdit: (id: string) => void
@@ -76,6 +76,16 @@ export function SessionFollowupDock(props: {
           <For each={props.items}>
             {(item) => (
               <div class="flex items-center gap-2 min-w-0 py-1">
+                <Show when={item.marker}>
+                  {(marker) => (
+                    <span
+                      class="h-2 w-2 shrink-0 rounded-full"
+                      style={{ background: marker().color }}
+                      title={marker().label}
+                      aria-label={marker().label}
+                    />
+                  )}
+                </Show>
                 <span class="min-w-0 flex-1 truncate text-13-regular text-text-strong">{item.text}</span>
                 <Button
                   size="small"
