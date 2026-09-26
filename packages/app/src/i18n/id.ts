@@ -176,6 +176,8 @@ export const dict = {
   "command.model.variant.cycle.description": "Beralih ke tingkat usaha berikutnya",
   "command.prompt.mode.shell": "Shell",
   "command.prompt.mode.normal": "Prompt",
+  "command.prompt.broadcast": "Kirim ke grup tab",
+  "command.tab.group": "Grup tab...",
   "command.permissions.autoaccept.enable": "Terima izin otomatis",
   "command.permissions.autoaccept.disable": "Hentikan penerimaan izin otomatis",
   "command.workspace.toggle": "Alihkan ruang kerja",
@@ -417,6 +419,11 @@ export const dict = {
   "prompt.toast.commandSendFailed.title": "Gagal mengirim perintah",
   "prompt.toast.promptSendFailed.title": "Gagal mengirim prompt",
   "prompt.toast.promptSendFailed.description": "Tidak dapat mengambil sesi",
+  "prompt.toast.broadcast.title": "Terkirim ke grup tab",
+  "prompt.toast.broadcast.sent": "Terkirim: {{titles}}",
+  "prompt.toast.broadcast.queued": "Sibuk, dimasukkan ke antrean: {{titles}}",
+  "prompt.toast.broadcast.failed": "Gagal: {{titles}}",
+  "tabGroup.hint": "{{name}}: {{count}} tab. {{keybind}} mengirim ke semua",
 
   "dialog.mcp.title": "MCP",
   "dialog.mcp.description": "{{enabled}} dari {{total}} diaktifkan",
@@ -432,6 +439,11 @@ export const dict = {
   "mcp.auth.clickToAuthenticate": "Klik untuk mengautentikasi",
 
   "dialog.fork.empty": "Tidak ada pesan yang dapat dicabangkan",
+  "dialog.tabGroup.title": "Grup tab",
+  "dialog.tabGroup.search.placeholder": "Cari atau buat grup",
+  "dialog.tabGroup.create": 'Buat grup "{{name}}"',
+  "dialog.tabGroup.remove": "Hapus dari grup",
+  "dialog.tabGroup.members": "{{count}} dalam grup",
 
   "dialog.directory.search.placeholder": "Cari folder",
   "dialog.directory.empty": "Folder tidak ditemukan",

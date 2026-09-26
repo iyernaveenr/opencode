@@ -176,6 +176,8 @@ export const dict = {
   "command.model.variant.cycle.description": "Prebaci na sljedeći nivo",
   "command.prompt.mode.shell": "Shell",
   "command.prompt.mode.normal": "Prompt",
+  "command.prompt.broadcast": "Pošalji grupi kartica",
+  "command.tab.group": "Grupa kartica...",
   "command.permissions.autoaccept.enable": "Automatski prihvati dozvole",
   "command.permissions.autoaccept.disable": "Zaustavi automatsko prihvatanje dozvola",
   "command.workspace.toggle": "Prikaži/sakrij radne prostore",
@@ -417,6 +419,11 @@ export const dict = {
   "prompt.toast.commandSendFailed.title": "Neuspješno slanje komande",
   "prompt.toast.promptSendFailed.title": "Neuspješno slanje upita",
   "prompt.toast.promptSendFailed.description": "Nije moguće dohvatiti sesiju",
+  "prompt.toast.broadcast.title": "Poslano grupi kartica",
+  "prompt.toast.broadcast.sent": "Poslano: {{titles}}",
+  "prompt.toast.broadcast.queued": "Zauzete, stavljene u red: {{titles}}",
+  "prompt.toast.broadcast.failed": "Neuspjelo: {{titles}}",
+  "tabGroup.hint": "{{name}}: {{count}} kartica. {{keybind}} šalje svima",
 
   "dialog.mcp.title": "MCP-ovi",
   "dialog.mcp.description": "{{enabled}} od {{total}} omogućeno",
@@ -432,6 +439,11 @@ export const dict = {
   "mcp.status.disabled": "onemogućeno",
 
   "dialog.fork.empty": "Nema poruka za fork",
+  "dialog.tabGroup.title": "Grupa kartica",
+  "dialog.tabGroup.search.placeholder": "Pronađi ili kreiraj grupu",
+  "dialog.tabGroup.create": 'Kreiraj grupu "{{name}}"',
+  "dialog.tabGroup.remove": "Ukloni iz grupe",
+  "dialog.tabGroup.members": "{{count}} u grupi",
 
   "dialog.directory.search.placeholder": "Pretraži fascikle",
   "dialog.directory.empty": "Nema pronađenih fascikli",

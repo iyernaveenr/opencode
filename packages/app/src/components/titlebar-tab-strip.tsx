@@ -7,12 +7,14 @@ import { Accessibility, AutoScroller, Feedback, PointerActivationConstraints } f
 import { RestrictToHorizontalAxis } from "@dnd-kit/abstract/modifiers"
 import { RestrictToElement } from "@dnd-kit/dom/modifiers"
 import { arrayMove } from "@dnd-kit/helpers"
-import { tabHref, tabKey, type SessionTab, type Tab } from "@/context/tabs"
+import { tabHref, tabKey, type SessionTab, type Tab, type TabGroup } from "@/context/tabs"
+import { tabGroupColor } from "@/utils/tab-groups"
 import { ServerConnection } from "@/context/server"
 import { DraftTabItem, TabNavItem } from "@/components/titlebar-tab-nav"
 import { useGlobal, type ServerCtx } from "@/context/global"
 import { useLanguage } from "@/context/language"
 import { useCommand } from "@/context/command"
+import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useTabs } from "@/context/tabs"
 import { createTabPromptState } from "@/context/prompt"
 import { base64Encode } from "@opencode-ai/core/util/encode"
@@ -29,7 +31,9 @@ function SessionTabSlot(props: {
   forceTruncate: boolean
   session: () => Session | undefined
   fallbackTitle?: string
+  group?: TabGroup
   onRename: (title: string) => Promise<void>
+  onGroup: () => void
   onNavigate: (element: HTMLDivElement) => void
   onClose: () => void
 }) {
@@ -60,12 +64,23 @@ function SessionTabSlot(props: {
         session={props.session}
         fallbackTitle={props.fallbackTitle}
         onRename={props.onRename}
+        onGroup={props.onGroup}
         onNavigate={() => props.onNavigate(ref)}
         onClose={props.onClose}
         active={props.active()}
         forceTruncate={props.forceTruncate}
         dragging={sortable.isDragSource()}
       />
+      <Show when={props.group}>
+        {(group) => (
+          <span
+            data-tab-group={group().id}
+            title={group().name}
+            class="pointer-events-none absolute inset-x-3 bottom-0.5 h-0.5 rounded-full"
+            style={{ background: tabGroupColor(group().color) }}
+          />
+        )}
+      </Show>
     </div>
   )
 }
@@ -80,6 +95,7 @@ function SessionTabEntry(props: {
   onVisibleChange: (visible: boolean) => void
   onNavigate: (element: HTMLDivElement) => void
   onClose: () => void
+  onGroup: () => void
 }) {
   const tabs = useTabs()
   const language = useLanguage()
@@ -159,7 +175,9 @@ function SessionTabEntry(props: {
         forceTruncate={props.forceTruncate}
         session={session}
         fallbackTitle={persisted()?.title ?? (missingSession() ? language.t("session.tab.unknown") : undefined)}
+        group={tabs.groupOf(props.tab)}
         onRename={rename}
+        onGroup={props.onGroup}
         onNavigate={props.onNavigate}
         onClose={props.onClose}
       />
@@ -221,6 +239,9 @@ export function TitlebarTabStrip(props: {
   const global = useGlobal()
   const language = useLanguage()
   const command = useCommand()
+  const dialog = useDialog()
+  const openGroupDialog = (tab: SessionTab) =>
+    void import("@/components/dialog-tab-group").then((x) => dialog.show(() => <x.DialogTabGroup tab={tab} />))
   let scrollRef!: HTMLDivElement
   let listRef!: HTMLDivElement
   let resizeFrame: number | undefined
@@ -244,6 +265,16 @@ export function TitlebarTabStrip(props: {
       keybind: `mod+option+ArrowRight,ctrl+tab`,
       hidden: true,
       onSelect: () => selectAdjacentTab(1),
+    },
+    {
+      id: "tab.group",
+      category: language.t("command.category.session"),
+      title: language.t("command.tab.group"),
+      disabled: props.currentTab()?.type !== "session",
+      onSelect: () => {
+        const tab = props.currentTab()
+        if (tab?.type === "session") openGroupDialog(tab)
+      },
     },
   ])
 
@@ -360,6 +391,7 @@ export function TitlebarTabStrip(props: {
                         props.onNavigate(tab, element)
                       }}
                       onClose={() => props.onClose(tab)}
+                      onGroup={() => openGroupDialog(tab)}
                     />
                   )
                 }

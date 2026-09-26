@@ -27,6 +27,7 @@ export function TabNavItem(props: {
   fallbackTitle?: string
   onRename: (title: string) => Promise<void>
   onClose: () => void
+  onGroup?: () => void
   onNavigate: () => void
   active?: boolean
   forceTruncate?: boolean
@@ -336,6 +337,9 @@ export function TabNavItem(props: {
           <MenuV2.Item disabled={!props.session() || rename.isPending} onSelect={() => setMenu("rename", true)}>
             {language.t("common.rename")}
           </MenuV2.Item>
+          <Show when={props.onGroup}>
+            {(onGroup) => <MenuV2.Item onSelect={() => onGroup()()}>{language.t("command.tab.group")}</MenuV2.Item>}
+          </Show>
           <MenuV2.Item onSelect={props.onClose}>{language.t("common.closeTab")}</MenuV2.Item>
         </MenuV2.Context.Content>
       </MenuV2.Context.Portal>

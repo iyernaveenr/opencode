@@ -4,7 +4,10 @@ import { base64Encode } from "@opencode-ai/core/util/encode"
 import { Binary } from "@opencode-ai/core/util/binary"
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router"
 import { batch, startTransition, type Accessor } from "solid-js"
-import { useTabs } from "@/context/tabs"
+import { tabKey, useTabs, type SessionTab } from "@/context/tabs"
+import { useBroadcastQueue } from "@/context/broadcast-queue"
+import { useGlobal } from "@/context/global"
+import { ServerConnection, useServer } from "@/context/server"
 import { useServerSync, type ServerSync } from "@/context/server-sync"
 import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
@@ -244,7 +247,95 @@ export function createPromptSubmit(input: PromptSubmitInput) {
   const params = useParams()
   const [search] = useSearchParams<{ draftId?: string }>()
   const tabs = useTabs()
+  const global = useGlobal()
+  const server = useServer()
+  const queue = useBroadcastQueue()
   const pendingKey = (sessionID: string) => ScopedKey.from(sdk().scope, sessionID)
+
+  const broadcastTargets = (): SessionTab[] => {
+    const id = params.id
+    if (!id) return []
+    const current: SessionTab = { type: "session", server: server.key, sessionId: id }
+    const group = tabs.groupOf(current)
+    if (!group) return []
+    return tabs.groupMembers(group.id).filter((tab) => tabKey(tab) !== tabKey(current))
+  }
+
+  // Every target keeps its own directory, agent and model; only the prompt is shared.
+  const broadcast = async (draft: FollowupDraft, targets: SessionTab[]) => {
+    const titleOf = (tab: SessionTab, info?: Session) => tabs.info[tabKey(tab)]?.title ?? info?.title ?? tab.sessionId
+    const sent: string[] = []
+    const queued: string[] = []
+    const failed: string[] = []
+    type Ctx = ReturnType<typeof global.ensureServerCtx>
+    const deliver = (ctx: Ctx, info: Session) => {
+      const directory = info.directory
+      return sendFollowupDraft({
+        api: ctx.sdk.ensureDirSdkContext(directory).api.session,
+        serverSync: ctx.sync,
+        sync: ctx.sync.ensureDirSyncContext(directory),
+        draft: {
+          ...draft,
+          sessionID: info.id,
+          sessionDirectory: directory,
+          agent: info.agent ?? draft.agent,
+          model: info.model ? { providerID: info.model.providerID, modelID: info.model.id } : draft.model,
+          variant: info.model ? info.model.variant : draft.variant,
+        },
+        optimisticBusy: true,
+      })
+    }
+    await Promise.all(
+      targets.map(async (tab) => {
+        const conn = global.servers.list().find((item) => ServerConnection.key(item) === tab.server)
+        if (!conn) {
+          failed.push(titleOf(tab))
+          return
+        }
+        const ctx = global.ensureServerCtx(conn)
+        const info =
+          ctx.sync.session.peek(tab.sessionId) ?? (await ctx.sync.session.resolve(tab.sessionId).catch(() => undefined))
+        if (!info) {
+          failed.push(titleOf(tab))
+          return
+        }
+        const group = tabs.groupOf(tab)
+        const status = ctx.sync.session.data.session_status[info.id]?.type ?? "idle"
+        if (status !== "idle" && group) {
+          // The target's model or agent may change before its turn ends; read them at delivery time.
+          queue.enqueue({
+            id: Identifier.ascending("message"),
+            tab,
+            group: group.id,
+            title: titleOf(tab, info),
+            draft,
+            text: draft.prompt.map((part) => ("content" in part ? part.content : "")).join(""),
+            send: () => deliver(ctx, ctx.sync.session.peek(info.id) ?? info).then(() => undefined),
+          })
+          queued.push(titleOf(tab, info))
+          return
+        }
+        await deliver(ctx, info)
+          .then(() => {
+            sent.push(titleOf(tab, info))
+          })
+          .catch(() => {
+            failed.push(titleOf(tab, info))
+          })
+      }),
+    )
+    // The toast renders its description on one line, so every bucket carries its own label.
+    const details = [
+      sent.length ? language.t("prompt.toast.broadcast.sent", { titles: sent.join(", ") }) : "",
+      queued.length ? language.t("prompt.toast.broadcast.queued", { titles: queued.join(", ") }) : "",
+      failed.length ? language.t("prompt.toast.broadcast.failed", { titles: failed.join(", ") }) : "",
+    ].filter((line) => line !== "")
+    showToast({
+      variant: failed.length ? "error" : undefined,
+      title: language.t("prompt.toast.broadcast.title"),
+      description: details.join(". "),
+    })
+  }
 
   const errorMessage = (err: unknown) => {
     if (err && typeof err === "object" && "message" in err && typeof err.message === "string") return err.message
@@ -315,7 +406,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     })
   }
 
-  const handleSubmit = async (event: Event) => {
+  const handleSubmit = async (event: Event, options?: { broadcast?: boolean }) => {
     event.preventDefault()
 
     const target = prompt.capture()
@@ -486,6 +577,23 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       return
     }
 
+    // A group send holds the originating tab too while it is answering, instead of steering
+    // its running turn like a plain Enter would; the queue delivers it with the other targets.
+    const groupTargets = options?.broadcast ? broadcastTargets() : []
+    if (
+      groupTargets.length > 0 &&
+      !isNewSession &&
+      mode === "normal" &&
+      !text.startsWith("/") &&
+      (serverSync().session.data.session_status[session.id]?.type ?? "idle") !== "idle"
+    ) {
+      clearContext(submission.target())
+      clearInput()
+      const current: SessionTab = { type: "session", server: server.key, sessionId: session.id }
+      void broadcast(draft, [current, ...groupTargets])
+      return
+    }
+
     input.onSubmit?.()
 
     if (mode === "shell") {
@@ -636,10 +744,15 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       removeOptimisticMessage()
       if (restoreInput()) restoreCommentItems(submission.target(), commentItems)
     })
+
+    if (options?.broadcast) {
+      if (groupTargets.length > 0) void broadcast(draft, groupTargets)
+    }
   }
 
   return {
     abort,
     handleSubmit,
+    broadcastTargets,
   }
 }

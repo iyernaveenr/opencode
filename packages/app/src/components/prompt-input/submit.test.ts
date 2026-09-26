@@ -34,6 +34,31 @@ const sentCommands: unknown[] = []
 const commands: Array<{ name: string }> = []
 let serverSessionSyncs = 0
 
+type GroupTab = { type: "session"; server: string; sessionId: string }
+let groupTabs: GroupTab[] = []
+const groupSessions: Record<
+  string,
+  {
+    id: string
+    directory: string
+    title: string
+    agent?: string
+    model?: { id: string; providerID: string; variant?: string }
+  }
+> = {}
+const busySessions = new Set<string>()
+const broadcastPrompts: Array<{ directory: string; input: any }> = []
+const broadcastOptimistic: Array<{ directory: string; sessionID?: string; message: any }> = []
+const queuedBroadcasts: Array<{
+  id: string
+  tab: GroupTab
+  group: string
+  title: string
+  text: string
+  draft: { prompt: unknown }
+  send: () => Promise<void>
+}> = []
+
 let params: { id?: string } = {}
 let search: { draftId?: string } = {}
 let selected = "/repo/worktree-a"
@@ -135,6 +160,7 @@ beforeAll(async () => {
   mock.module("@opencode-ai/ui/toast", () => ({
     Toast: { Region: () => null },
     showToast: () => 0,
+    toaster: { dismiss: () => undefined },
   }))
 
   mock.module("@opencode-ai/core/util/encode", () => ({
@@ -167,16 +193,90 @@ beforeAll(async () => {
     return { usePermission: () => ({ currentServerState: () => state(permissionServer) }) }
   })
 
+  // Module mocks leak across test files; keep the real exports other suites rely on.
+  const realServer = await import("@/context/server")
   mock.module("@/context/server", () => ({
+    ...realServer,
     useServer: () => ({ key: "server-key" }),
+    ServerConnection: {
+      ...realServer.ServerConnection,
+      key: (conn: { url: string }) => conn.url.replace("http://", ""),
+    },
   }))
 
   mock.module("@/context/tabs", () => ({
+    tabKey: (tab: GroupTab) => `${tab.server}\n${tab.sessionId}`,
     useTabs: () => ({
       draft: () => ({ server: "project-server" }),
       promoteDraft: (draftID: string, session: { server: string; sessionId: string }) => {
         promotedDrafts.push({ draftID, ...session })
       },
+      info: {},
+      groupOf: (tab: GroupTab) =>
+        groupTabs.some((item) => item.sessionId === tab.sessionId && item.server === tab.server)
+          ? {
+              id: "group",
+              name: "Models",
+              color: 0,
+              tabs: groupTabs.map((item) => `${item.server}\n${item.sessionId}`),
+            }
+          : undefined,
+      groupMembers: () => groupTabs,
+    }),
+  }))
+
+  mock.module("@/context/global", () => ({
+    useGlobal: () => ({
+      servers: { list: () => [{ url: "http://server-key" }] },
+      ensureServerCtx: () => ({
+        sync: {
+          session: {
+            peek: (id: string) => groupSessions[id],
+            resolve: async (id: string) => groupSessions[id],
+            data: {
+              get session_status() {
+                return Object.fromEntries([...busySessions].map((id) => [id, { type: "busy" }]))
+              },
+            },
+            set: () => undefined,
+          },
+          ensureDirSyncContext: (directory: string) => ({
+            session: {
+              optimistic: {
+                add: (value: { sessionID?: string; message: unknown }) =>
+                  broadcastOptimistic.push({ directory, sessionID: value.sessionID, message: value.message }),
+                remove: () => undefined,
+              },
+            },
+            data: { command: [] },
+            set: () => undefined,
+          }),
+        },
+        sdk: {
+          ensureDirSdkContext: (directory: string) => ({
+            api: {
+              session: {
+                prompt: async (input: unknown) => {
+                  broadcastPrompts.push({ directory, input })
+                },
+                command: async () => undefined,
+              },
+            },
+          }),
+        },
+      }),
+    }),
+  }))
+
+  mock.module("@/context/broadcast-queue", () => ({
+    useBroadcastQueue: () => ({
+      enqueue: (item: (typeof queuedBroadcasts)[number]) => {
+        queuedBroadcasts.push(item)
+      },
+      pending: () => queuedBroadcasts,
+      flush: () => undefined,
+      remove: () => undefined,
+      send: () => undefined,
     }),
   }))
 
@@ -240,6 +340,11 @@ beforeAll(async () => {
         sync: async () => {
           serverSessionSyncs++
         },
+        data: {
+          get session_status() {
+            return Object.fromEntries([...busySessions].map((id) => [id, { type: "busy" }]))
+          },
+        },
       },
       child: (directory: string) => {
         syncedDirectories.push(directory)
@@ -271,6 +376,7 @@ beforeAll(async () => {
   mock.module("@/context/language", () => ({
     useLanguage: () => ({
       t: (key: string) => key,
+      plural: (key: string) => key,
     }),
   }))
 
@@ -302,6 +408,12 @@ beforeEach(() => {
   createSessionGate = undefined
   serverSessionSyncs = 0
   for (const key of Object.keys(storedSessions)) delete storedSessions[key]
+  groupTabs = []
+  for (const key of Object.keys(groupSessions)) delete groupSessions[key]
+  busySessions.clear()
+  broadcastPrompts.length = 0
+  broadcastOptimistic.length = 0
+  queuedBroadcasts.length = 0
 })
 
 describe("prompt submit worktree selection", () => {
@@ -594,5 +706,146 @@ describe("prompt submit worktree selection", () => {
     expect(storedSessions["/repo/worktree-a"]).toHaveLength(1)
     expect(storedSessions["/repo/worktree-a"]?.[0]).toMatchObject({ id: "session-1", title: "New session 1" })
     expect(optimisticSeeded).toEqual([true])
+  })
+})
+
+describe("prompt submit tab group broadcast", () => {
+  const create = () =>
+    createPromptSubmit({
+      prompt,
+      info: () => ({ id: "session-1" }),
+      imageAttachments: () => [],
+      commentCount: () => 0,
+      autoAccept: () => false,
+      mode: () => "normal",
+      working: () => false,
+      editor: () => undefined,
+      queueScroll: () => undefined,
+      promptLength: (value) => value.reduce((sum, part) => sum + ("content" in part ? part.content.length : 0), 0),
+      addToHistory: () => undefined,
+      resetHistoryNavigation: () => undefined,
+      setMode: () => undefined,
+      setPopover: () => undefined,
+    })
+
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+  test("lists the other session tabs of the current group as targets", () => {
+    params = { id: "session-1" }
+    groupTabs = [
+      { type: "session", server: "server-key", sessionId: "session-1" },
+      { type: "session", server: "server-key", sessionId: "session-2" },
+      { type: "session", server: "server-key", sessionId: "session-3" },
+    ]
+    expect(
+      create()
+        .broadcastTargets()
+        .map((tab) => tab.sessionId),
+    ).toEqual(["session-2", "session-3"])
+    groupTabs = []
+    expect(create().broadcastTargets()).toEqual([])
+  })
+
+  test("sends the same prompt to every other tab with that session's own model and directory", async () => {
+    params = { id: "session-1" }
+    variant = "high"
+    groupTabs = [
+      { type: "session", server: "server-key", sessionId: "session-1" },
+      { type: "session", server: "server-key", sessionId: "session-2" },
+      { type: "session", server: "server-key", sessionId: "session-3" },
+      { type: "session", server: "server-key", sessionId: "session-4" },
+    ]
+    groupSessions["session-2"] = {
+      id: "session-2",
+      directory: "/repo/other",
+      title: "Kimi",
+      agent: "plan",
+      model: { id: "kimi-k3", providerID: "moonshotai" },
+    }
+    groupSessions["session-3"] = { id: "session-3", directory: "/repo/main", title: "Fresh" }
+    groupSessions["session-4"] = { id: "session-4", directory: "/repo/main", title: "Busy" }
+    busySessions.add("session-4")
+
+    await create().handleSubmit({ preventDefault: () => undefined } as unknown as Event, { broadcast: true })
+    await flush()
+
+    expect(sentPrompts).toEqual(["/repo/main"])
+    expect(broadcastPrompts.map((item) => item.directory).sort()).toEqual(["/repo/main", "/repo/other"])
+    const kimi = broadcastPrompts.find((item) => item.directory === "/repo/other")!.input
+    expect(kimi).toMatchObject({
+      sessionID: "session-2",
+      agent: "plan",
+      model: { providerID: "moonshotai", modelID: "kimi-k3" },
+      variant: undefined,
+      text: "ls",
+    })
+    const fresh = broadcastPrompts.find((item) => item.directory === "/repo/main")!.input
+    expect(fresh).toMatchObject({
+      sessionID: "session-3",
+      agent: "agent",
+      model: { providerID: "provider", modelID: "model" },
+      variant: "high",
+    })
+    expect(broadcastOptimistic.map((item) => item.sessionID).sort()).toEqual(["session-2", "session-3"])
+    expect(broadcastPrompts.some((item) => item.input.sessionID === "session-4")).toBe(false)
+    // The busy target is held back, not skipped; its send runs later with that session's own model.
+    expect(queuedBroadcasts.map((item) => [item.title, item.group, item.tab.sessionId, item.text])).toEqual([
+      ["Busy", "group", "session-4", "ls"],
+    ])
+    expect(queuedBroadcasts[0].id).toBeTruthy()
+    expect(queuedBroadcasts[0].draft.prompt).toEqual(promptValue)
+    groupSessions["session-4"] = {
+      ...groupSessions["session-4"],
+      agent: "plan",
+      model: { id: "slow-model", providerID: "ollama" },
+    }
+    await queuedBroadcasts[0].send()
+    const late = broadcastPrompts.find((item) => item.input.sessionID === "session-4")!.input
+    expect(late).toMatchObject({
+      sessionID: "session-4",
+      agent: "plan",
+      model: { providerID: "ollama", modelID: "slow-model" },
+      text: "ls",
+    })
+  })
+
+  test("holds the originating tab in the queue when it is busy instead of steering its turn", async () => {
+    params = { id: "session-1" }
+    groupTabs = [
+      { type: "session", server: "server-key", sessionId: "session-1" },
+      { type: "session", server: "server-key", sessionId: "session-2" },
+    ]
+    groupSessions["session-1"] = { id: "session-1", directory: "/repo/main", title: "Me" }
+    groupSessions["session-2"] = { id: "session-2", directory: "/repo/main", title: "Other" }
+    busySessions.add("session-1")
+
+    await create().handleSubmit({ preventDefault: () => undefined } as unknown as Event, { broadcast: true })
+    await flush()
+
+    // Nothing went through the plain submit path, which would have steered the running turn.
+    expect(sentPrompts).toEqual([])
+    expect(broadcastPrompts.map((item) => item.input.sessionID)).toEqual(["session-2"])
+    expect(queuedBroadcasts.map((item) => [item.title, item.tab.sessionId])).toEqual([["Me", "session-1"]])
+
+    busySessions.clear()
+    await queuedBroadcasts[0].send()
+    expect(broadcastPrompts.map((item) => item.input.sessionID).sort()).toEqual(["session-1", "session-2"])
+    const mine = broadcastPrompts.find((item) => item.input.sessionID === "session-1")!.input
+    expect(mine).toMatchObject({ agent: "agent", model: { providerID: "provider", modelID: "model" }, text: "ls" })
+  })
+
+  test("does not fan out without the broadcast option", async () => {
+    params = { id: "session-1" }
+    groupTabs = [
+      { type: "session", server: "server-key", sessionId: "session-1" },
+      { type: "session", server: "server-key", sessionId: "session-2" },
+    ]
+    groupSessions["session-2"] = { id: "session-2", directory: "/repo/main", title: "Other" }
+
+    await create().handleSubmit({ preventDefault: () => undefined } as unknown as Event)
+    await flush()
+
+    expect(sentPrompts).toEqual(["/repo/main"])
+    expect(broadcastPrompts).toEqual([])
   })
 })

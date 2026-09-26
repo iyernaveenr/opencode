@@ -1,6 +1,6 @@
 import type { Session } from "@opencode-ai/sdk/v2/client"
 import { createSimpleContext } from "@opencode-ai/ui/context"
-import { createStore, produce } from "solid-js/store"
+import { createStore, produce, reconcile } from "solid-js/store"
 import { Persist, persisted, removePersisted, draftPersistedKeys } from "@/utils/persist"
 import { ServerConnection, useServer } from "./server"
 import { createEffect, getOwner, onCleanup, startTransition } from "solid-js"
@@ -13,6 +13,17 @@ import { createTabMemory } from "./tab-memory"
 import { nextTabAfterClose, pushClosedTab, removeClosedTabs, takeClosedTab, type ClosedTab } from "./closed-tabs"
 import { createDraftPromptSession, type PromptModel } from "./prompt-state"
 import { migrateTabs } from "./tab-migration"
+import {
+  assignTabGroup,
+  createTabGroup,
+  groupForTab,
+  pruneTabGroups,
+  removeTabFromGroups,
+  type TabGroup,
+  type TabGroups,
+} from "@/utils/tab-groups"
+
+export type { TabGroup } from "@/utils/tab-groups"
 
 export type SessionTab = {
   type: "session"
@@ -67,6 +78,7 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
     const [recent, setRecent, , recentReady] = persisted(Persist.window("tabs.recent"), createStore<RecentTab>({}))
     const [info, setInfo] = persisted(Persist.window("tabs.info"), createStore<Record<string, TabInfo>>({}))
     const [closed, setClosed, , closedReady] = persisted(Persist.window("tabs.closed"), createStore<ClosedTab[]>([]))
+    const [groups, setGroups] = persisted(Persist.window("tabs.groups"), createStore<TabGroups>({}))
 
     const params = useParams()
     const navigate = useNavigate()
@@ -116,6 +128,11 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
       )
     }
 
+    const forget = (key: string) => {
+      removeInfo(key)
+      if (groupForTab(groups, key)) setGroups(reconcile(removeTabFromGroups(groups, key)))
+    }
+
     onCleanup(memory.dispose)
 
     createEffect(() => {
@@ -127,7 +144,7 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
           if (!servers.has(tab.server)) {
             const key = tabKey(tab)
             memory.remove(key)
-            removeInfo(key)
+            forget(key)
           }
         }
         setStore(() => next)
@@ -137,6 +154,8 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
       for (const key of Object.keys(info)) {
         if (!keys.has(key)) removeInfo(key)
       }
+      const pruned = pruneTabGroups(groups, keys)
+      if (Object.values(groups).some((group) => pruned[group.id] !== group)) setGroups(reconcile(pruned))
     })
 
     createEffect(() => {
@@ -172,7 +191,7 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
         if (nextTab) navigateTab(nextTab)
       }).finally(() => closing.delete(key))
       memory.remove(key)
-      removeInfo(key)
+      forget(key)
       if (draftID) removeDraftPersisted(draftID)
     }
 
@@ -290,7 +309,7 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
         const removed = store.filter((tab) => tab.server === key).map(tabKey)
         setStore((tabs) => tabs.filter((tab) => tab.server !== key))
         for (const key of removed) memory.remove(key)
-        for (const key of removed) removeInfo(key)
+        for (const key of removed) forget(key)
         if (recent.key && removed.includes(recent.key)) setRecentKey(undefined)
         for (const draftID of drafts) removeDraftPersisted(draftID)
         if (server.key === key) navigate("/")
@@ -345,7 +364,7 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
           if (recent.key && removed.includes(recent.key)) setRecentKey(undefined)
         })
         for (const key of removed) memory.remove(key)
-        for (const key of removed) removeInfo(key)
+        for (const key of removed) forget(key)
       },
       rememberSessionInfo(tab: SessionTab, session: Session) {
         const key = tabKey(tab)
@@ -378,8 +397,35 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
       stateValue<T>(tab: Tab, name: string) {
         return memory.get<T>(tabKey(tab), name)
       },
+      groupOf(tab: Tab): TabGroup | undefined {
+        return groupForTab(groups, tabKey(tab))
+      },
+      groupMembers(groupID: string): SessionTab[] {
+        const group = groups[groupID]
+        if (!group) return []
+        return store.filter((tab): tab is SessionTab => tab.type === "session" && group.tabs.includes(tabKey(tab)))
+      },
+      // Empty groups are pruned reactively, so a new group must start with its first member.
+      createGroup(name: string, tab: Tab): TabGroup | undefined {
+        if (tab.type !== "session") return
+        const id = uuid()
+        setGroups(reconcile(assignTabGroup(createTabGroup(groups, id, name), tabKey(tab), id)))
+        return groups[id]
+      },
+      assignGroup(tab: Tab, groupID: string | undefined) {
+        if (tab.type !== "session") return
+        setGroups(reconcile(assignTabGroup(groups, tabKey(tab), groupID)))
+      },
+      removeGroup(groupID: string) {
+        if (!groups[groupID]) return
+        setGroups(
+          produce((draft) => {
+            delete draft[groupID]
+          }),
+        )
+      },
     }
 
-    return { ...actions, store, info, ready, recentReady }
+    return { ...actions, store, info, groups, ready, recentReady }
   },
 })
