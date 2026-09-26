@@ -1,7 +1,7 @@
 import type { SessionInfo, SessionMessageUser } from "@opencode/client/promise"
 import type { ComposerSelection } from "@/composer/adapter"
 import { createSimpleContext } from "@opencode/ui/context"
-import { createStore, produce } from "solid-js/store"
+import { createStore, produce, reconcile } from "solid-js/store"
 import { Persist, persisted, removePersisted, draftPersistedKeys } from "@/runtime/persistence/storage"
 import { ServerConnection, useServers } from "@/runtime/server/registry"
 import { createEffect, getOwner, onCleanup, startTransition } from "solid-js"
@@ -21,10 +21,12 @@ import {
 import { appendPrompt, promptLength } from "@/composer/prompt-parts"
 import { TabStorage } from "./schema"
 import { useCurrentRoute } from "@/shell/state/layout"
+import { assignTabGroup, createTabGroup, groupForTab, pruneTabGroups, removeTabFromGroups } from "./groups"
 
 export type SessionTab = typeof TabStorage.Session.Type
 export type DraftTab = typeof TabStorage.Draft.Type
 export type Tab = typeof TabStorage.Tab.Type
+export type TabGroup = typeof TabStorage.Group.Type
 
 export type PendingSession = {
   draft: DraftTab
@@ -76,6 +78,7 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
     const [info, setInfo, , infoReady] = persisted(Persist.window("tabs.info"), TabStorage.Infos, {})
     const [panes, setPanes, , panesReady] = persisted(Persist.window("tabs.panes"), TabStorage.Panes, {})
     const [closed, setClosed, , closedReady] = persisted(Persist.window("tabs.closed"), TabStorage.Closed, [])
+    const [groups, setGroups] = persisted(Persist.window("tabs.groups"), TabStorage.Groups, {})
     const [pending, setPending] = createStore<Record<string, PendingSession | undefined>>({})
 
     const params = useParams()
@@ -136,6 +139,10 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
       )
     }
 
+    const removeGroupMember = (key: string) => {
+      if (groupForTab(groups, key)) setGroups(reconcile(removeTabFromGroups(groups, key)))
+    }
+
     onCleanup(memory.dispose)
 
     createEffect(() => {
@@ -149,6 +156,7 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
             memory.remove(key)
             removeInfo(key)
             removePanes(key)
+            removeGroupMember(key)
           }
         }
         setStore(() => next)
@@ -158,6 +166,8 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
       for (const key of Object.keys(info)) {
         if (!keys.has(key)) removeInfo(key)
       }
+      const pruned = pruneTabGroups(groups, keys)
+      if (Object.values(groups).some((group) => pruned[group.id] !== group)) setGroups(reconcile(pruned))
       if (!panesReady()) return
       for (const key of Object.keys(panes)) {
         if (!keys.has(key)) removePanes(key)
@@ -199,6 +209,7 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
       memory.remove(key)
       removeInfo(key)
       removePanes(key)
+      removeGroupMember(key)
       if (draftID) removeDraftPersisted(draftID)
     }
 
@@ -405,6 +416,7 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
         setStore((tabs) => tabs.filter((tab) => tab.server !== key))
         for (const key of removed) memory.remove(key)
         for (const key of removed) removeInfo(key)
+        for (const key of removed) removeGroupMember(key)
         if (recent.key && removed.includes(recent.key)) setRecentKey(undefined)
         for (const draftID of drafts) removeDraftPersisted(draftID)
       },
@@ -456,6 +468,7 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
         })
         for (const key of removed) memory.remove(key)
         for (const key of removed) removeInfo(key)
+        for (const key of removed) removeGroupMember(key)
       },
       rememberSessionInfo(tab: SessionTab, session: SessionInfo) {
         const key = tabKey(tab)
@@ -531,8 +544,35 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
         }
         setPanes(key, size, value)
       },
+      groupOf(tab: Tab): TabGroup | undefined {
+        return groupForTab(groups, tabKey(tab))
+      },
+      groupMembers(groupID: string): SessionTab[] {
+        const group = groups[groupID]
+        if (!group) return []
+        return store.filter((tab): tab is SessionTab => tab.type === "session" && group.tabs.includes(tabKey(tab)))
+      },
+      // Empty groups are pruned reactively, so a new group must start with its first member.
+      createGroup(name: string, tab: Tab): TabGroup | undefined {
+        if (tab.type !== "session") return
+        const id = uuid()
+        setGroups(reconcile(assignTabGroup(createTabGroup(groups, id, name), tabKey(tab), id)))
+        return groups[id]
+      },
+      assignGroup(tab: Tab, groupID: string | undefined) {
+        if (tab.type !== "session") return
+        setGroups(reconcile(assignTabGroup(groups, tabKey(tab), groupID)))
+      },
+      removeGroup(groupID: string) {
+        if (!groups[groupID]) return
+        setGroups(
+          produce((draft) => {
+            delete draft[groupID]
+          }),
+        )
+      },
     }
 
-    return { ...actions, store, info, ready, infoReady, recentReady, panesReady }
+    return { ...actions, store, info, groups, ready, infoReady, recentReady, panesReady }
   },
 })

@@ -17,7 +17,7 @@ import { createSessionTabs } from "@/session/helpers"
 import { showToast } from "@/shell/notifications/toast"
 import { formatServerError } from "@/runtime/server/errors"
 import { Skill } from "@opencode/schema/skill"
-import type { ComposerAdapter, ComposerControls, ComposerQueue } from "./adapter"
+import type { ComposerAdapter, ComposerBroadcastTarget, ComposerControls, ComposerQueue } from "./adapter"
 import { isAttachment } from "./prompt-parts"
 import type { PromptHistoryComment } from "./history/entry"
 import { createComposerHistory } from "./history/store"
@@ -30,7 +30,10 @@ export type ComposerModel = ComposerEditorModel & {
   readonly model: ComposerControls["model"]
 }
 
-export function createComposerModel(adapter: ComposerAdapter, options?: { queue?: ComposerQueue }): ComposerModel {
+export function createComposerModel(
+  adapter: ComposerAdapter,
+  options?: { queue?: ComposerQueue; broadcast?: () => ComposerBroadcastTarget[] },
+): ComposerModel {
   const sdk = useWorkspaceLocation()
   const data = useData()
   const server = useServer()
@@ -246,12 +249,26 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
       if (!queue) return "steer"
       return (alternate ? queue.alternate() : queue.delivery()) ?? "steer"
     },
+    broadcast: options?.broadcast,
     notify: {
       missingSelection: () =>
         showToast({
           title: language.t("prompt.toast.modelAgentRequired.title"),
           description: language.t("prompt.toast.modelAgentRequired.description"),
         }),
+      broadcast: (result) => {
+        // The toast renders its description on one line, so every bucket carries its own label.
+        const details = [
+          result.sent.length ? language.t("prompt.toast.broadcast.sent", { titles: result.sent.join(", ") }) : "",
+          result.queued.length ? language.t("prompt.toast.broadcast.queued", { titles: result.queued.join(", ") }) : "",
+          result.failed.length ? language.t("prompt.toast.broadcast.failed", { titles: result.failed.join(", ") }) : "",
+        ].filter((line) => line !== "")
+        showToast({
+          variant: result.failed.length ? "error" : undefined,
+          title: language.t("prompt.toast.broadcast.title"),
+          description: details.join(". "),
+        })
+      },
       failed: (kind, error) =>
         showToast({
           title: language.t(
@@ -411,6 +428,18 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
       keybind: "mod+shift+e",
       disabled: controller.state.mode === "normal",
       onSelect: () => controller.dispatch({ type: "mode.normal" }),
+    },
+    {
+      id: "prompt.broadcast",
+      title: language.t("command.prompt.broadcast"),
+      category: language.t("command.category.session"),
+      keybind: "mod+shift+enter",
+      disabled:
+        !available() ||
+        controller.state.mode !== "normal" ||
+        !!options?.queue?.editing() ||
+        (options?.broadcast?.() ?? []).length === 0,
+      onSelect: () => void submission.submit(new Event("submit"), { broadcast: true }),
     },
   ])
 

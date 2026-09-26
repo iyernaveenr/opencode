@@ -525,6 +525,8 @@ export const dict = {
   "command.model.variant.cycle.description": "Cambiar al siguiente nivel de esfuerzo",
   "command.prompt.mode.shell": "Shell",
   "command.prompt.mode.normal": "Prompt",
+  "command.prompt.broadcast": "Enviar al grupo de pestañas",
+  "command.tab.group": "Grupo de pestañas...",
   "command.permissions.autoaccept.enable": "Aceptar permisos automáticamente",
   "command.permissions.autoaccept.disable": "Dejar de aceptar permisos automáticamente",
   "command.workspace.toggle": "Activar o desactivar espacios de trabajo",
@@ -758,6 +760,11 @@ export const dict = {
   "prompt.toast.commandSendFailed.title": "Fallo al enviar comando",
   "prompt.toast.promptSendFailed.title": "Fallo al enviar prompt",
   "prompt.toast.promptSendFailed.description": "No se pudo recuperar la sesión",
+  "prompt.toast.broadcast.title": "Enviado al grupo de pestañas",
+  "prompt.toast.broadcast.sent": "Enviado: {{titles}}",
+  "prompt.toast.broadcast.queued": "Ocupadas, en cola: {{titles}}",
+  "prompt.toast.broadcast.failed": "Error: {{titles}}",
+  "tabGroup.hint": "{{name}}: {{count}} pestañas. {{keybind}} envía a todas",
 
   "dialog.mcp.title": "Servidores MCP",
   "dialog.mcp.description": "{{enabled}} de {{total}} habilitados",
@@ -773,6 +780,11 @@ export const dict = {
   "mcp.status.disabled": "deshabilitado",
 
   "dialog.fork.empty": "No hay mensajes desde donde bifurcar",
+  "dialog.tabGroup.title": "Grupo de pestañas",
+  "dialog.tabGroup.search.placeholder": "Buscar o crear un grupo",
+  "dialog.tabGroup.create": 'Crear grupo "{{name}}"',
+  "dialog.tabGroup.remove": "Quitar del grupo",
+  "dialog.tabGroup.members": "{{count}} en el grupo",
 
   "dialog.directory.search.placeholder": "Buscar carpetas",
   "dialog.directory.empty": "No se encontraron carpetas",

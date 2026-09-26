@@ -61,3 +61,10 @@ export const Panes = Schema.Record(
 )
 export const ClosedTab = Schema.Struct({ tab: SessionCodec, index: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)) })
 export const Closed = Persistence.array(ClosedTab)
+export const Group = Persistence.struct({
+  id: Schema.String,
+  name: Schema.String,
+  color: Schema.Int,
+  tabs: Persistence.array(Schema.String),
+})
+export const Groups = Schema.Record(Schema.String, Schema.mutableKey(Group))

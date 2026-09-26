@@ -109,3 +109,12 @@ export type NewSessionComposerAdapter = ComposerAdapterBase & {
 }
 
 export type ComposerAdapter = ActiveComposerAdapter | NewSessionComposerAdapter
+
+// Another session that receives the same prompt on a group send; it keeps its own agent and model.
+export type ComposerBroadcastTarget = {
+  title: string
+  session: () => ComposerSession | undefined
+  // Fetches the session when its tab has not been opened in this window yet.
+  load: () => Promise<void>
+  busy: () => boolean
+}

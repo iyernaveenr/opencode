@@ -4,6 +4,7 @@ import { setCursorPosition } from "@/composer/editor/dom"
 import { createComposerModel } from "@/composer/model"
 import { useSettings } from "@/settings/model"
 import { createActiveComposerAdapter } from "./adapter"
+import { useTabGroupTargets } from "./broadcast"
 import { createSessionQueue } from "./queue"
 import { createSessionComposerRegionController } from "./session-composer-region-controller"
 
@@ -38,7 +39,7 @@ export function createSessionComposerController(input: {
       })
     },
   })
-  const composer = createComposerModel(adapter, { queue })
+  const composer = createComposerModel(adapter, { queue, broadcast: useTabGroupTargets(() => input.sessionID).targets })
   const editable = createMemo(() => region.showComposer() && !region.child())
   // Requests hide the view without disposing its draft or queue edit.
   createEffect(on(editable, () => composer.onDragLeave()))

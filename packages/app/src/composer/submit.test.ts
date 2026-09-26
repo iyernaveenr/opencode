@@ -730,3 +730,206 @@ describe("Composer submission", () => {
     expect(state.current().some((part) => part.type === "image")).toBe(true)
   })
 })
+
+describe("Composer tab group broadcast", () => {
+  test("sends the same prompt to every group target with that session's own selection", async () => {
+    const state = createMemoryComposerState({ prompt: "compare this" }).capture()
+    const calls: string[] = []
+    const primary = Promise.withResolvers<Parameters<ComposerSession["data"]["session"]["prompt"]>[0]>()
+    const target = session({ calls, prompt: async (value) => primary.resolve(value) })
+    const adapter: ActiveComposerAdapter = {
+      kind: "active-session",
+      state,
+      ready: () => true,
+      controls,
+      working: () => false,
+      session: () => target,
+      interrupt: async () => undefined,
+      submitted() {},
+      setEditor() {},
+    }
+
+    const kimiCalls: string[] = []
+    const kimiPrompt = Promise.withResolvers<Parameters<ComposerSession["data"]["session"]["prompt"]>[0]>()
+    const kimi = {
+      ...session({
+        calls: kimiCalls,
+        current: () => ({ agent: "plan", model: { id: "kimi-k3", providerID: "moonshotai" } }),
+        prompt: async (value) => kimiPrompt.resolve(value),
+      }),
+      id: "session-2",
+      directory: "C:/other",
+    }
+    const freshCalls: string[] = []
+    const freshPrompt = Promise.withResolvers<Parameters<ComposerSession["data"]["session"]["prompt"]>[0]>()
+    const fresh = {
+      ...session({ calls: freshCalls, prompt: async (value) => freshPrompt.resolve(value) }),
+      id: "session-3",
+    }
+    const busyCalls: string[] = []
+    const busyPrompt = Promise.withResolvers<Parameters<ComposerSession["data"]["session"]["prompt"]>[0]>()
+    const busy = {
+      ...session({ calls: busyCalls, prompt: async (value) => busyPrompt.resolve(value) }),
+      id: "session-4",
+    }
+    const result = Promise.withResolvers<{ sent: string[]; queued: string[]; failed: string[] }>()
+    const loaded = (target: ComposerSession) => ({ session: () => target, load: async () => undefined })
+
+    const submit = createComposerSubmit({
+      adapter,
+      mode: () => "normal",
+      commands: () => [],
+      editor: () => undefined,
+      queueScroll() {},
+      addToHistory() {},
+      removeFromHistory() {},
+      resetHistory() {},
+      setMode() {},
+      closePopover() {},
+      broadcast: () => [
+        { title: "Kimi", ...loaded(kimi), busy: () => false },
+        { title: "Fresh", ...loaded(fresh), busy: () => false },
+        { title: "Busy", ...loaded(busy), busy: () => true },
+        { title: "Gone", session: () => undefined, load: async () => undefined, busy: () => false },
+      ],
+      notify: { missingSelection() {}, failed() {}, broadcast: (value) => result.resolve(value) },
+      comments: { capture: () => [], clear() {}, restore() {} },
+    })
+
+    await submit.submit(new Event("submit"), { broadcast: true })
+    const [first, second, third, fourth, outcome] = await Promise.all([
+      primary.promise,
+      kimiPrompt.promise,
+      freshPrompt.promise,
+      busyPrompt.promise,
+      result.promise,
+    ])
+
+    expect(calls).toEqual(["switch-agent", "switch-model", "prompt"])
+    expect(first.sessionID).toBe("session-1")
+    // Targets are never reconfigured; each keeps its own agent and model.
+    expect(kimiCalls).toEqual(["prompt"])
+    expect(second).toMatchObject({
+      sessionID: "session-2",
+      text: "compare this",
+      delivery: "steer",
+      metadata: { agent: "plan", model: { providerID: "moonshotai", modelID: "kimi-k3" } },
+    })
+    expect(second.id).not.toBe(first.id)
+    expect(third).toMatchObject({
+      sessionID: "session-3",
+      metadata: { agent: "build", model: { providerID: "provider-1", modelID: "model-1", variant: "balanced" } },
+    })
+    // A busy target is not steered mid-turn; the prompt waits in its inbox.
+    expect(busyCalls).toEqual(["prompt"])
+    expect(fourth).toMatchObject({ sessionID: "session-4", text: "compare this", delivery: "queue" })
+    expect(outcome).toEqual({ sent: ["Kimi", "Fresh"], queued: ["Busy"], failed: ["Gone"] })
+  })
+
+  test("loads a target whose tab was never opened before sending", async () => {
+    const state = createMemoryComposerState({ prompt: "warm up" }).capture()
+    const target = session({ calls: [], prompt: async () => undefined })
+    const adapter: ActiveComposerAdapter = {
+      kind: "active-session",
+      state,
+      ready: () => true,
+      controls,
+      working: () => false,
+      session: () => target,
+      interrupt: async () => undefined,
+      submitted() {},
+      setEditor() {},
+    }
+    const coldCalls: string[] = []
+    const coldPrompt = Promise.withResolvers<Parameters<ComposerSession["data"]["session"]["prompt"]>[0]>()
+    const cold = {
+      ...session({ calls: coldCalls, prompt: async (value) => coldPrompt.resolve(value) }),
+      id: "session-2",
+    }
+    let known: ComposerSession | undefined
+    const loads: string[] = []
+    const result = Promise.withResolvers<{ sent: string[]; queued: string[]; failed: string[] }>()
+    const submit = createComposerSubmit({
+      adapter,
+      mode: () => "normal",
+      commands: () => [],
+      editor: () => undefined,
+      queueScroll() {},
+      addToHistory() {},
+      removeFromHistory() {},
+      resetHistory() {},
+      setMode() {},
+      closePopover() {},
+      broadcast: () => [
+        {
+          title: "Cold",
+          session: () => known,
+          load: async () => {
+            loads.push("cold")
+            known = cold
+          },
+          busy: () => false,
+        },
+        {
+          title: "Broken",
+          session: () => undefined,
+          load: async () => {
+            loads.push("broken")
+            throw new Error("offline")
+          },
+          busy: () => false,
+        },
+      ],
+      notify: { missingSelection() {}, failed() {}, broadcast: (value) => result.resolve(value) },
+      comments: { capture: () => [], clear() {}, restore() {} },
+    })
+
+    await submit.submit(new Event("submit"), { broadcast: true })
+    const [prompt, outcome] = await Promise.all([coldPrompt.promise, result.promise])
+
+    expect(loads.sort()).toEqual(["broken", "cold"])
+    expect(coldCalls).toEqual(["prompt"])
+    expect(prompt).toMatchObject({ sessionID: "session-2", text: "warm up", delivery: "steer" })
+    expect(outcome).toEqual({ sent: ["Cold"], queued: [], failed: ["Broken"] })
+  })
+
+  test("does not fan out without the broadcast option", async () => {
+    const state = createMemoryComposerState({ prompt: "just here" }).capture()
+    const calls: string[] = []
+    const target = session({ calls, prompt: async () => undefined })
+    const adapter: ActiveComposerAdapter = {
+      kind: "active-session",
+      state,
+      ready: () => true,
+      controls,
+      working: () => false,
+      session: () => target,
+      interrupt: async () => undefined,
+      submitted() {},
+      setEditor() {},
+    }
+    const otherCalls: string[] = []
+    const other = { ...session({ calls: otherCalls, prompt: async () => undefined }), id: "session-2" }
+    const submit = createComposerSubmit({
+      adapter,
+      mode: () => "normal",
+      commands: () => [],
+      editor: () => undefined,
+      queueScroll() {},
+      addToHistory() {},
+      removeFromHistory() {},
+      resetHistory() {},
+      setMode() {},
+      closePopover() {},
+      broadcast: () => [{ title: "Other", session: () => other, load: async () => undefined, busy: () => false }],
+      notify: { missingSelection() {}, failed() {} },
+      comments: { capture: () => [], clear() {}, restore() {} },
+    })
+
+    await submit.submit(new Event("submit"))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(calls).toEqual(["switch-agent", "switch-model", "prompt"])
+    expect(otherCalls).toEqual([])
+  })
+})

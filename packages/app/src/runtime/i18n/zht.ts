@@ -181,6 +181,8 @@ export const dict = {
   "command.model.variant.cycle.description": "切換到下一個強度等級",
   "command.prompt.mode.shell": "Shell",
   "command.prompt.mode.normal": "Prompt",
+  "command.prompt.broadcast": "傳送到分頁群組",
+  "command.tab.group": "分頁群組...",
   "command.permissions.autoaccept.enable": "自動接受權限",
   "command.permissions.autoaccept.disable": "停止自動接受權限",
   "command.workspace.toggle": "切換工作區",
@@ -416,6 +418,11 @@ export const dict = {
   "prompt.toast.commandSendFailed.title": "傳送命令失敗",
   "prompt.toast.promptSendFailed.title": "傳送提示失敗",
   "prompt.toast.promptSendFailed.description": "無法取得工作階段",
+  "prompt.toast.broadcast.title": "已傳送到分頁群組",
+  "prompt.toast.broadcast.sent": "已傳送：{{titles}}",
+  "prompt.toast.broadcast.queued": "忙碌中，已加入佇列：{{titles}}",
+  "prompt.toast.broadcast.failed": "失敗：{{titles}}",
+  "tabGroup.hint": "{{name}}：{{count}} 個分頁。{{keybind}} 傳送給全部",
 
   "dialog.mcp.title": "MCP",
   "dialog.mcp.description": "已啟用 {{enabled}} / {{total}}",
@@ -431,6 +438,11 @@ export const dict = {
   "mcp.status.disabled": "已停用",
 
   "dialog.fork.empty": "沒有可用於分支的訊息",
+  "dialog.tabGroup.title": "分頁群組",
+  "dialog.tabGroup.search.placeholder": "尋找或建立群組",
+  "dialog.tabGroup.create": "建立群組「{{name}}」",
+  "dialog.tabGroup.remove": "從群組中移除",
+  "dialog.tabGroup.members": "群組中有 {{count}} 個",
 
   "dialog.directory.search.placeholder": "搜尋資料夾",
   "dialog.directory.empty": "找不到資料夾",

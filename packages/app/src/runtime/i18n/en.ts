@@ -140,6 +140,8 @@ export const dict = {
   "command.model.variant.cycle.description": "Switch to the next effort level",
   "command.prompt.mode.shell": "Shell",
   "command.prompt.mode.normal": "Prompt",
+  "command.prompt.broadcast": "Send to tab group",
+  "command.tab.group": "Tab group...",
   "command.permissions.autoaccept.enable": "Auto-accept permissions",
   "command.permissions.autoaccept.disable": "Stop auto-accepting permissions",
   "command.workspace.toggle": "Toggle worktrees",
@@ -443,6 +445,11 @@ export const dict = {
   "prompt.toast.commandSendFailed.title": "Failed to send command",
   "prompt.toast.promptSendFailed.title": "Failed to send prompt",
   "prompt.toast.promptSendFailed.description": "Unable to retrieve session",
+  "prompt.toast.broadcast.title": "Sent to tab group",
+  "prompt.toast.broadcast.sent": "Sent: {{titles}}",
+  "prompt.toast.broadcast.queued": "Busy, queued: {{titles}}",
+  "prompt.toast.broadcast.failed": "Failed: {{titles}}",
+  "tabGroup.hint": "{{name}}: {{count}} tabs. {{keybind}} sends to all",
 
   "dialog.mcp.title": "MCPs",
   "dialog.mcp.description": "{{enabled}} of {{total}} enabled",
@@ -459,6 +466,11 @@ export const dict = {
   "mcp.auth.interactiveForm": "MCP server {{name}} requires an interactive authentication form",
 
   "dialog.fork.empty": "No messages to fork from",
+  "dialog.tabGroup.title": "Tab group",
+  "dialog.tabGroup.search.placeholder": "Find or create a group",
+  "dialog.tabGroup.create": 'Create group "{{name}}"',
+  "dialog.tabGroup.remove": "Remove from group",
+  "dialog.tabGroup.members": "{{count}} in group",
 
   "dialog.directory.search.placeholder": "Search folders",
   "dialog.directory.empty": "No folders found",

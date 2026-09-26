@@ -18,6 +18,7 @@ import { useWorkspaceLocation } from "@/workspaces/location"
 import { requireServerKey, sessionHref } from "@/shell/routes/session"
 import { useComposerCommands } from "@/composer/commands"
 import { useSessionCommands } from "../commands/use-session-commands"
+import { TabGroupHint } from "./tab-group-hint"
 import type { SessionModel } from "../model"
 import type { SessionScreenLayout } from "../screen-layout"
 import { syncPromptModel, syncSessionModel } from "../session-model-helpers"
@@ -223,6 +224,7 @@ export function ActiveSessionComposerRegion(props: {
       composer={
         <div class="relative">
           <SessionQueuePanel queue={props.model.queue} />
+          <TabGroupHint />
           <div class="relative z-10">
             <Composer
               model={props.model.composer}

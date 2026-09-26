@@ -4,7 +4,13 @@ import type { Accessor } from "solid-js"
 import type { PromptHistoryComment } from "./history/entry"
 import type { ImageAttachmentPart, Prompt } from "./state"
 import { clonePrompt, promptLength } from "./prompt-parts"
-import type { ComposerAdapter, ComposerDelivery, ComposerSelection, ComposerSession } from "./adapter"
+import type {
+  ComposerAdapter,
+  ComposerBroadcastTarget,
+  ComposerDelivery,
+  ComposerSelection,
+  ComposerSession,
+} from "./adapter"
 import { createComposerSubmission } from "./submission-state"
 import { buildPromptRequest } from "./request"
 import { setCursorPosition } from "./editor/dom"
@@ -39,9 +45,11 @@ type ComposerSubmitInput = {
   closePopover: () => void
   delivery?: (alternate: boolean) => ComposerDelivery
   clientCommand?: (text: string) => (() => void | Promise<void>) | undefined
+  broadcast?: () => ComposerBroadcastTarget[]
   notify: {
     missingSelection: () => void
     failed: (kind: "shell" | "command" | "prompt", error: unknown) => void
+    broadcast?: (result: { sent: string[]; queued: string[]; failed: string[] }) => void
   }
   comments: {
     capture: () => PromptHistoryComment[]
@@ -51,7 +59,7 @@ type ComposerSubmitInput = {
 }
 
 export function createComposerSubmit(input: ComposerSubmitInput) {
-  const submit = async (event: globalThis.Event, options?: { alternate?: boolean }) => {
+  const submit = async (event: globalThis.Event, options?: { alternate?: boolean; broadcast?: boolean }) => {
     event.preventDefault()
 
     const prompt = clonePrompt(input.adapter.state.current())
@@ -137,6 +145,10 @@ export function createComposerSubmit(input: ComposerSubmitInput) {
               if (optimisticBusy) session.data.session.setStatus(session.id, "idle")
             })
         })
+        if (options?.broadcast && input.adapter.kind === "active-session") {
+          const targets = input.broadcast?.() ?? []
+          if (targets.length > 0) void broadcastPrompt(input, value, targets)
+        }
         return
       }
 
@@ -444,4 +456,63 @@ function failSubmission(
   rollback?.()
   restore()
   input.notify.failed(kind, error)
+}
+
+// The primary session already applied the composer selection; every target keeps its own.
+async function broadcastPrompt(
+  input: ComposerSubmitInput,
+  value: ComposerSubmission,
+  targets: ComposerBroadcastTarget[],
+) {
+  const sent: string[] = []
+  const queued: string[] = []
+  const failed: string[] = []
+  await Promise.all(
+    targets.map(async (target) => {
+      const session =
+        target.session() ??
+        (await target.load().then(
+          () => target.session(),
+          () => undefined,
+        ))
+      if (!session) {
+        failed.push(target.title)
+        return
+      }
+      // A busy target waits for its current turn to finish rather than being steered mid-turn.
+      const delivery = target.busy() ? "queue" : "steer"
+      try {
+        const request = await buildSubmissionRequest(session, value)
+        const current = session.current()
+        const model = current?.model
+          ? {
+              providerID: current.model.providerID,
+              modelID: current.model.id,
+              ...(current.model.variant ? { variant: current.model.variant } : {}),
+            }
+          : { ...value.selection.model, ...(value.selection.variant ? { variant: value.selection.variant } : {}) }
+        await session.data.session.prompt({
+          id: SessionMessage.ID.create(),
+          sessionID: session.id,
+          delivery,
+          text: request.text,
+          files: request.files.map((file) => ({ uri: file.uri, name: file.name, mention: file.mention })),
+          agents: request.agents,
+          skills: request.skills,
+          metadata: {
+            displayText: request.displayText,
+            comments: request.comments,
+            attachments: request.attachments,
+            agent: current?.agent ?? value.selection.agent,
+            model,
+          },
+        })
+        if (delivery === "queue") queued.push(target.title)
+        else sent.push(target.title)
+      } catch {
+        failed.push(target.title)
+      }
+    }),
+  )
+  input.notify.broadcast?.({ sent, queued, failed })
 }

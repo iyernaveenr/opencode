@@ -188,6 +188,8 @@ export const dict = {
   "command.model.variant.cycle.description": "Sonraki efor seviyesine geç",
   "command.prompt.mode.shell": "Kabuk",
   "command.prompt.mode.normal": "İstem",
+  "command.prompt.broadcast": "Sekme grubuna gönder",
+  "command.tab.group": "Sekme grubu...",
   "command.permissions.autoaccept.enable": "İzinleri otomatik kabul et",
   "command.permissions.autoaccept.disable": "İzinleri otomatik kabul etmeyi durdur",
   "command.workspace.toggle": "Çalışma alanlarını aç/kapat",
@@ -421,6 +423,11 @@ export const dict = {
   "prompt.toast.commandSendFailed.title": "Komut gönderilemedi",
   "prompt.toast.promptSendFailed.title": "İstem gönderilemedi",
   "prompt.toast.promptSendFailed.description": "Oturum alınamadı",
+  "prompt.toast.broadcast.title": "Sekme grubuna gönderildi",
+  "prompt.toast.broadcast.sent": "Gönderildi: {{titles}}",
+  "prompt.toast.broadcast.queued": "Meşgul, sıraya alındı: {{titles}}",
+  "prompt.toast.broadcast.failed": "Başarısız: {{titles}}",
+  "tabGroup.hint": "{{name}}: {{count}} sekme. {{keybind}} hepsine gönderir",
 
   "dialog.mcp.title": "MCP'ler",
   "dialog.mcp.description": "Toplam {{total}} öğeden {{enabled}} tanesi etkin",
@@ -436,6 +443,11 @@ export const dict = {
   "mcp.status.disabled": "devre dışı",
 
   "dialog.fork.empty": "Dallandırılacak mesaj yok",
+  "dialog.tabGroup.title": "Sekme grubu",
+  "dialog.tabGroup.search.placeholder": "Grup bul veya oluştur",
+  "dialog.tabGroup.create": '"{{name}}" grubunu oluştur',
+  "dialog.tabGroup.remove": "Gruptan çıkar",
+  "dialog.tabGroup.members": "Grupta {{count}}",
 
   "dialog.directory.search.placeholder": "Klasör ara",
   "dialog.directory.empty": "Klasör bulunamadı",

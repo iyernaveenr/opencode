@@ -201,6 +201,8 @@ export const dict = {
 
   "command.prompt.mode.shell": "Shell",
   "command.prompt.mode.normal": "Prompt",
+  "command.prompt.broadcast": "发送到标签页组",
+  "command.tab.group": "标签页组...",
 
   "command.permissions.autoaccept.enable": "自动接受权限",
   "command.permissions.autoaccept.disable": "停止自动接受权限",
@@ -436,6 +438,11 @@ export const dict = {
   "prompt.toast.commandSendFailed.title": "发送命令失败",
   "prompt.toast.promptSendFailed.title": "发送提示失败",
   "prompt.toast.promptSendFailed.description": "无法获取会话",
+  "prompt.toast.broadcast.title": "已发送到标签页组",
+  "prompt.toast.broadcast.sent": "已发送：{{titles}}",
+  "prompt.toast.broadcast.queued": "忙碌，已加入队列：{{titles}}",
+  "prompt.toast.broadcast.failed": "失败：{{titles}}",
+  "tabGroup.hint": "{{name}}：{{count}} 个标签页。{{keybind}} 发送给全部",
 
   "dialog.mcp.title": "MCP 服务器",
   "dialog.mcp.description": "已启用 {{enabled}} / {{total}}",
@@ -452,6 +459,11 @@ export const dict = {
   "mcp.status.disabled": "已禁用",
 
   "dialog.fork.empty": "没有可用于创建新会话的消息",
+  "dialog.tabGroup.title": "标签页组",
+  "dialog.tabGroup.search.placeholder": "查找或创建分组",
+  "dialog.tabGroup.create": "创建分组“{{name}}”",
+  "dialog.tabGroup.remove": "从分组中移除",
+  "dialog.tabGroup.members": "分组中有 {{count}} 个",
 
   "dialog.directory.search.placeholder": "搜索文件夹",
   "dialog.directory.empty": "未找到文件夹",

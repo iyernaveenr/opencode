@@ -209,6 +209,8 @@ export const dict = {
   "command.model.variant.cycle.description": "Перемкнути на наступний рівень зусилля",
   "command.prompt.mode.shell": "Команда",
   "command.prompt.mode.normal": "Запит",
+  "command.prompt.broadcast": "Надіслати групі вкладок",
+  "command.tab.group": "Група вкладок...",
   "command.permissions.autoaccept.enable": "Автоматично приймати дозволи",
   "command.permissions.autoaccept.disable": "Зупинити автоматичне прийняття дозволів",
   "command.workspace.toggle": "Перемкнути робочі області",
@@ -443,6 +445,11 @@ export const dict = {
   "prompt.toast.commandSendFailed.title": "Не вдалося надіслати команду",
   "prompt.toast.promptSendFailed.title": "Не вдалося надіслати запит",
   "prompt.toast.promptSendFailed.description": "Не вдалося отримати сесію",
+  "prompt.toast.broadcast.title": "Надіслано групі вкладок",
+  "prompt.toast.broadcast.sent": "Надіслано: {{titles}}",
+  "prompt.toast.broadcast.queued": "Зайняті, поставлено в чергу: {{titles}}",
+  "prompt.toast.broadcast.failed": "Помилка: {{titles}}",
+  "tabGroup.hint": "{{name}}: {{count}} вкладок. {{keybind}} надсилає всім",
 
   "dialog.mcp.title": "MCP",
   "dialog.mcp.description": "{{enabled}} з {{total}} увімкнено",
@@ -458,6 +465,11 @@ export const dict = {
   "mcp.auth.clickToAuthenticate": "Натисніть для автентифікації",
 
   "dialog.fork.empty": "Немає повідомлень для відгалуження",
+  "dialog.tabGroup.title": "Група вкладок",
+  "dialog.tabGroup.search.placeholder": "Знайти або створити групу",
+  "dialog.tabGroup.create": "Створити групу «{{name}}»",
+  "dialog.tabGroup.remove": "Вилучити з групи",
+  "dialog.tabGroup.members": "{{count}} у групі",
 
   "dialog.directory.search.placeholder": "Пошук папок",
   "dialog.directory.empty": "Папок не знайдено",

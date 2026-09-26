@@ -176,6 +176,8 @@ export const dict = {
   "command.model.variant.cycle.description": "Переключиться к следующему уровню усилий",
   "command.prompt.mode.shell": "Оболочка",
   "command.prompt.mode.normal": "Промпт",
+  "command.prompt.broadcast": "Отправить группе вкладок",
+  "command.tab.group": "Группа вкладок...",
   "command.permissions.autoaccept.enable": "Автоматически принимать разрешения",
   "command.permissions.autoaccept.disable": "Остановить автоматическое принятие разрешений",
   "command.workspace.toggle": "Переключить рабочие пространства",
@@ -408,6 +410,11 @@ export const dict = {
   "prompt.toast.commandSendFailed.title": "Не удалось отправить команду",
   "prompt.toast.promptSendFailed.title": "Не удалось отправить запрос",
   "prompt.toast.promptSendFailed.description": "Не удалось получить сессию",
+  "prompt.toast.broadcast.title": "Отправлено группе вкладок",
+  "prompt.toast.broadcast.sent": "Отправлено: {{titles}}",
+  "prompt.toast.broadcast.queued": "Заняты, поставлены в очередь: {{titles}}",
+  "prompt.toast.broadcast.failed": "Ошибка: {{titles}}",
+  "tabGroup.hint": "{{name}}: {{count}} вкладок. {{keybind}} отправляет всем",
 
   "dialog.mcp.title": "MCP",
   "dialog.mcp.description": "{{enabled}} из {{total}} включено",
@@ -423,6 +430,11 @@ export const dict = {
   "mcp.status.disabled": "отключено",
 
   "dialog.fork.empty": "Нет сообщений для ответвления",
+  "dialog.tabGroup.title": "Группа вкладок",
+  "dialog.tabGroup.search.placeholder": "Найти или создать группу",
+  "dialog.tabGroup.create": "Создать группу «{{name}}»",
+  "dialog.tabGroup.remove": "Убрать из группы",
+  "dialog.tabGroup.members": "{{count}} в группе",
 
   "dialog.directory.search.placeholder": "Поиск папок",
   "dialog.directory.empty": "Папки не найдены",

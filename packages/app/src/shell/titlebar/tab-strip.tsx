@@ -6,12 +6,14 @@ import { Accessibility, AutoScroller, Feedback, PointerActivationConstraints } f
 import { RestrictToHorizontalAxis, RestrictToVerticalAxis } from "@dnd-kit/abstract/modifiers"
 import { RestrictToElement } from "@dnd-kit/dom/modifiers"
 import { arrayMove } from "@dnd-kit/helpers"
-import { tabHref, tabKey, type SessionTab, type Tab } from "@/shell/tabs/tabs"
+import { tabHref, tabKey, type SessionTab, type Tab, type TabGroup } from "@/shell/tabs/tabs"
+import { tabGroupColor } from "@/shell/tabs/groups"
 import { ServerConnection } from "@/runtime/server/registry"
 import { DraftTabItem, TabNavItem } from "@/shell/titlebar/tab-nav"
 import { useGlobal, useServerCtx, type ServerCtx } from "@/runtime/server/runtime"
 import { useLanguage } from "@/runtime/i18n/language"
 import { useCommand } from "@/shell/commands/command"
+import { useDialog } from "@opencode/ui/context/dialog"
 import { useTabs } from "@/shell/tabs/tabs"
 import { createTabComposerState } from "@/composer/persistence"
 import { base64Encode } from "@opencode/util/encode"
@@ -29,7 +31,9 @@ function SessionTabSlot(props: {
   session: SessionInfo | undefined
   preparing: boolean
   fallbackTitle?: string
+  group?: TabGroup
   onRename: (title: string) => Promise<void>
+  onGroup: () => void
   onNavigate: (element: HTMLDivElement) => void
   onClose: () => void
 }) {
@@ -66,12 +70,27 @@ function SessionTabSlot(props: {
         preparing={props.preparing}
         fallbackTitle={props.fallbackTitle}
         onRename={props.onRename}
+        onGroup={props.onGroup}
         onNavigate={() => props.onNavigate(ref)}
         onClose={props.onClose}
         active={props.active}
         dragging={sortable.isDragSource()}
         orientation={props.orientation}
       />
+      <Show when={props.group}>
+        {(group) => (
+          <span
+            data-tab-group={group().id}
+            title={group().name}
+            class="pointer-events-none absolute rounded-full"
+            classList={{
+              "inset-x-3 bottom-0.5 h-0.5": props.orientation === "horizontal",
+              "inset-y-2 left-0.5 w-0.5": props.orientation === "vertical",
+            }}
+            style={{ background: tabGroupColor(group().color) }}
+          />
+        )}
+      </Show>
     </div>
   )
 }
@@ -86,6 +105,7 @@ function SessionTabEntry(props: {
   onVisibleChange: (visible: boolean) => void
   onNavigate: (element: HTMLDivElement) => void
   onClose: () => void
+  onGroup: () => void
 }) {
   const tabs = useTabs()
   const language = useLanguage()
@@ -174,7 +194,9 @@ function SessionTabEntry(props: {
             ? language.t("session.tab.session")
             : (persisted()?.title ?? (missingSession() ? language.t("session.tab.unknown") : undefined))
         }
+        group={tabs.groupOf(props.tab)}
         onRename={rename}
+        onGroup={props.onGroup}
         onNavigate={props.onNavigate}
         onClose={props.onClose}
       />
@@ -242,6 +264,9 @@ export function TitlebarTabStrip(props: {
   const global = useGlobal()
   const language = useLanguage()
   const command = useCommand()
+  const dialog = useDialog()
+  const openGroupDialog = (tab: SessionTab) =>
+    void import("@/shell/tabs/group-dialog").then((x) => dialog.show(() => <x.TabGroupDialog tab={tab} />))
   const vertical = () => props.orientation === "vertical"
   let listRef!: HTMLDivElement
   const [visibility, setVisibility] = createStore<Record<string, boolean>>({})
@@ -264,6 +289,16 @@ export function TitlebarTabStrip(props: {
       keybind: `mod+option+ArrowRight,ctrl+tab`,
       hidden: true,
       onSelect: () => selectAdjacentTab(1),
+    },
+    {
+      id: "tab.group",
+      category: language.t("command.category.session"),
+      title: language.t("command.tab.group"),
+      disabled: props.currentTab?.type !== "session",
+      onSelect: () => {
+        const tab = props.currentTab
+        if (tab?.type === "session") openGroupDialog(tab)
+      },
     },
   ])
 
@@ -369,6 +404,7 @@ export function TitlebarTabStrip(props: {
                         props.onNavigate(tab, element)
                       }}
                       onClose={() => props.onClose(tab)}
+                      onGroup={() => openGroupDialog(tab)}
                     />
                   )
                 }
