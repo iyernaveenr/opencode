@@ -31,6 +31,15 @@ const TOOL_OUTPUT_MAX_CHARS = 2_000
 const PRUNE_PROTECTED_TOOLS = ["skill"]
 const MIN_PRESERVE_RECENT_TOKENS = 2_000
 const MAX_PRESERVE_RECENT_TOKENS = 15_000
+// Reserved headroom per compaction request for the summarization instructions
+// (SUMMARY_TEMPLATE/SUMMARY_UPDATE_INSTRUCTIONS) plus the running summary text
+// carried between chunks. Both are small and bounded (summaries are generated
+// with a capped output budget), so a flat reserve is enough; this only matters
+// once a session's head is already large enough to need chunking at all.
+const CHUNK_PROMPT_RESERVE = 8_000
+// Token.estimate assumes 4 chars per token; code- and JSON-heavy history tokenizes denser, so a
+// chunk sized to the full window could still be rejected. Size chunks to a fraction of it.
+const CHUNK_BUDGET_RATIO = 0.6
 type Turn = {
   start: number
   end: number
@@ -66,7 +75,7 @@ const serialize = (message: SessionV1.WithParts) => {
   return message.parts
     .flatMap((part) => {
       if (part.type === "text") return part.text ? [`[Assistant]: ${part.text}`] : []
-      if (part.type === "reasoning") return part.text ? [`[Assistant reasoning]: ${part.text}`] : []
+      if (part.type === "reasoning") return part.text ? [`[Assistant reasoning]: ${truncate(part.text)}`] : []
       if (part.type !== "tool") return []
       const call = `[Assistant tool call]: ${part.tool}(${JSON.stringify(part.state.input)})`
       if (part.state.status === "completed") {
@@ -162,10 +171,44 @@ function splitTurn(input: {
   })
 }
 
+// Splits an oversized compaction head into sequential, turn-aligned chunks that
+// each fit `budget` tokens (measured the same way the actual compaction prompt
+// is sized: the plain serialized text, not the MessageV2 wire representation
+// used for tail-selection). Each chunk is summarized in order, folding the
+// running summary forward via the existing previous-summary-merge prompt, so
+// no single request has to hold more than one chunk's worth of raw history.
+// A turn that alone exceeds `budget` still gets its own chunk rather than
+// being split further: serialize() already caps individual tool outputs at
+// TOOL_OUTPUT_MAX_CHARS, so a single turn approaching the budget on its own
+// would require an extreme amount of non-tool text in one turn - rare enough
+// that falling through to the existing "too large to compact" error for that
+// one chunk, if even it is then rejected, is an acceptable fallback.
+function chunkHead(messages: SessionV1.WithParts[], budget: number): SessionV1.WithParts[][] {
+  const groups = turns(messages)
+  if (!groups.length) return [messages]
+  const chunks: SessionV1.WithParts[][] = []
+  let current: SessionV1.WithParts[] = []
+  let currentSize = 0
+  for (const turn of groups) {
+    const slice = messages.slice(turn.start, turn.end)
+    const size = Token.estimate(slice.map(serialize).filter(Boolean).join("\n\n"))
+    if (current.length > 0 && currentSize + size > budget) {
+      chunks.push(current)
+      current = []
+      currentSize = 0
+    }
+    current.push(...slice)
+    currentSize += size
+  }
+  if (current.length > 0) chunks.push(current)
+  return chunks.length > 0 ? chunks : [messages]
+}
+
 export interface Interface {
   readonly isOverflow: (input: {
     tokens: SessionV1.Assistant["tokens"]
     model: Provider.Model
+    variant?: string
   }) => Effect.Effect<boolean>
   readonly prune: (input: { sessionID: SessionID }) => Effect.Effect<void>
   readonly process: (input: {
@@ -203,12 +246,14 @@ const layer = Layer.effect(
     const isOverflow = Effect.fn("SessionCompaction.isOverflow")(function* (input: {
       tokens: SessionV1.Assistant["tokens"]
       model: Provider.Model
+      variant?: string
     }) {
       return overflow({
         cfg: yield* config.get(),
         tokens: input.tokens,
         model: input.model,
         outputTokenMax: flags.outputTokenMax,
+        variant: input.variant,
       })
     })
 
@@ -377,75 +422,145 @@ const layer = Layer.effect(
       )
       const msgs = structuredClone(selected.head)
       yield* plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
-      const conversation = msgs.map(serialize).filter(Boolean).join("\n\n")
-      const nextPrompt =
-        compacting.prompt ??
-        [
-          buildPrompt({
-            previousSummary,
-            context: [conversation],
-          }),
+
+      // A single compaction request has no bound on how much history it tries
+      // to summarize in one shot: `head` is "everything since the last
+      // successful summary", which can outgrow the model's context window on
+      // its own for a long-running, heavily-used session (observed directly:
+      // a 1.4M-token head rejected by Anthropic against a 1M-token model
+      // limit). When that happens, split the head into turn-aligned chunks
+      // that each fit a safe per-request budget, and fold them into the
+      // summary sequentially via the same previous-summary-merge prompt
+      // already used across separate compaction events. A plugin-supplied
+      // full prompt override disables chunking: it was written expecting one
+      // request, so that case keeps today's single-shot behavior verbatim.
+      const chunkBudget = Math.max(
+        MIN_PRESERVE_RECENT_TOKENS,
+        Math.floor(
+          usable({ cfg, model, outputTokenMax: flags.outputTokenMax, variant: userMessage.model.variant }) *
+            CHUNK_BUDGET_RATIO,
+        ) - CHUNK_PROMPT_RESERVE,
+      )
+      const headSize = Token.estimate(msgs.map(serialize).filter(Boolean).join("\n\n"))
+      const chunks = !compacting.prompt && headSize > chunkBudget ? chunkHead(msgs, chunkBudget) : [msgs]
+      const isSingleShot = chunks.length === 1
+
+      const runStep = Effect.fn("SessionCompaction.runStep")(function* (step: {
+        messages: SessionV1.WithParts[]
+        previousSummary: string | undefined
+      }) {
+        const conversation = step.messages.map(serialize).filter(Boolean).join("\n\n")
+        const summarized = [
+          buildPrompt({ previousSummary: step.previousSummary, context: [conversation] }),
           ...compacting.context,
         ]
           .filter(Boolean)
           .join("\n\n")
-      const ctx = yield* InstanceState.context
-      const msg: SessionV1.Assistant = {
-        id: MessageID.ascending(),
-        role: "assistant",
-        parentID: input.parentID,
-        sessionID: input.sessionID,
-        mode: "compaction",
-        agent: "compaction",
-        variant: userMessage.model.variant,
-        summary: true,
-        path: {
-          cwd: ctx.directory,
-          root: ctx.worktree,
-        },
-        cost: 0,
-        tokens: {
-          output: 0,
-          input: 0,
-          reasoning: 0,
-          cache: { read: 0, write: 0 },
-        },
-        modelID: model.id,
-        providerID: model.providerID,
-        time: {
-          created: Date.now(),
-        },
-      }
-      yield* session.updateMessage(msg)
-      const processor = yield* processors.create({
-        assistantMessage: msg,
-        sessionID: input.sessionID,
-        model,
-      })
-      const result = yield* processor.process({
-        user: userMessage,
-        agent,
-        sessionID: input.sessionID,
-        tools: {},
-        system: [],
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: [
-                  nextPrompt,
-                  ...(compacting.prompt ? ["The following is the conversation history:", conversation] : []),
-                ]
-                  .filter(Boolean)
-                  .join("\n\n"),
-              },
-            ],
+        const promptText = isSingleShot
+          ? [
+              compacting.prompt ?? summarized,
+              ...(compacting.prompt ? ["The following is the conversation history:", conversation] : []),
+            ]
+              .filter(Boolean)
+              .join("\n\n")
+          : summarized
+        const ctx = yield* InstanceState.context
+        const msg: SessionV1.Assistant = {
+          id: MessageID.ascending(),
+          role: "assistant",
+          parentID: input.parentID,
+          sessionID: input.sessionID,
+          mode: "compaction",
+          agent: "compaction",
+          variant: userMessage.model.variant,
+          summary: true,
+          path: {
+            cwd: ctx.directory,
+            root: ctx.worktree,
           },
-        ],
-        model,
+          cost: 0,
+          tokens: {
+            output: 0,
+            input: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: model.id,
+          providerID: model.providerID,
+          time: {
+            created: Date.now(),
+          },
+        }
+        yield* session.updateMessage(msg)
+        const processor = yield* processors.create({
+          assistantMessage: msg,
+          sessionID: input.sessionID,
+          model,
+        })
+        const result = yield* processor.process({
+          user: userMessage,
+          agent,
+          sessionID: input.sessionID,
+          tools: {},
+          system: [],
+          messages: [
+            {
+              role: "user",
+              content: [{ type: "text", text: promptText }],
+            },
+          ],
+          model,
+        })
+        // processor.message is the bare message info (it only carries
+        // bookkeeping fields like .error/.finish); the actual summary text
+        // lives in the parts written during streaming, so re-fetch the
+        // message with its parts to extract it for the next chunk.
+        const current = yield* session.messages({ sessionID: input.sessionID }).pipe(
+          Effect.catchIf(
+            (error): error is NotFoundError => NotFoundError.isInstance(error),
+            () => Effect.succeed(undefined),
+          ),
+        )
+        const withParts = current?.find((item) => item.info.id === msg.id)
+        const summary = withParts ? summaryText(withParts) : undefined
+        return { processor, result, summary }
       })
+
+      // Only the last chunk's message may survive as the compaction summary: an earlier chunk's
+      // message would otherwise count as a completed compaction (hiding the rest of the history
+      // if a later chunk fails) and sit in the live context next to the final summary.
+      const folded = { cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } } }
+      let priorSummary = previousSummary
+      let step = yield* runStep({ messages: chunks[0], previousSummary: priorSummary })
+      for (let i = 1; i < chunks.length; i++) {
+        if (step.result === "compact" || step.processor.message.error) break
+        priorSummary = step.summary ?? priorSummary
+        const done = step.processor.message
+        folded.cost += done.cost
+        folded.tokens.input += done.tokens.input
+        folded.tokens.output += done.tokens.output
+        folded.tokens.reasoning += done.tokens.reasoning
+        folded.tokens.cache.read += done.tokens.cache.read
+        folded.tokens.cache.write += done.tokens.cache.write
+        yield* session.removeMessage({ sessionID: input.sessionID, messageID: done.id })
+        step = yield* runStep({ messages: chunks[i], previousSummary: priorSummary })
+      }
+      const { processor, result } = step
+      if (folded.cost || folded.tokens.input || folded.tokens.output) {
+        const final = processor.message
+        final.cost += folded.cost
+        final.tokens = {
+          ...final.tokens,
+          input: final.tokens.input + folded.tokens.input,
+          output: final.tokens.output + folded.tokens.output,
+          reasoning: final.tokens.reasoning + folded.tokens.reasoning,
+          cache: {
+            read: final.tokens.cache.read + folded.tokens.cache.read,
+            write: final.tokens.cache.write + folded.tokens.cache.write,
+          },
+        }
+        yield* session.updateMessage(final)
+      }
 
       if (result === "compact") {
         processor.message.error = new SessionV1.ContextOverflowError({

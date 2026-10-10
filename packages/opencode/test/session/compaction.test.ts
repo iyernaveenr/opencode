@@ -1467,6 +1467,177 @@ describe("session.compaction.process", () => {
   )
 
   itCompaction.instance(
+    "splits an oversized compaction head into sequential chunks",
+    () => {
+      const stub = llm()
+      const captured: string[] = []
+      stub.push(
+        reply("chunk summary alpha", (input) => {
+          captured.push(JSON.stringify(input.messages))
+        }),
+      )
+      stub.push(
+        reply("chunk summary beta", (input) => {
+          captured.push(JSON.stringify(input.messages))
+        }),
+      )
+      // context - output = 9_000 usable; 60% of it minus the 8_000 chunk prompt reserve is
+      // negative, so the per-chunk budget floors at MIN_PRESERVE_RECENT_TOKENS = 2_000.
+      const small = ProviderTest.fake({ model: createModel({ context: 10_000, output: 1_000 }) })
+
+      return Effect.gen(function* () {
+        const ssn = yield* SessionNs.Service
+        const session = yield* ssn.create({})
+        // ~900 tokens each (3_600 chars / 4): first two fit together in one
+        // 2_000 token chunk (1_800 total), the third alone starts the next.
+        yield* createUserMessage(session.id, "MARKERONE ".repeat(360))
+        yield* createUserMessage(session.id, "MARKERTWO ".repeat(360))
+        yield* createUserMessage(session.id, "MARKERTHREE ".repeat(360))
+        yield* createUserMessage(session.id, "keep this turn")
+        yield* createCompactionMarker(session.id)
+
+        const msgs = yield* ssn.messages({ sessionID: session.id })
+        const parent = msgs.at(-1)?.info.id
+        expect(parent).toBeTruthy()
+        const result = yield* SessionCompaction.use.process({
+          parentID: parent!,
+          messages: msgs,
+          sessionID: session.id,
+          auto: false,
+        })
+
+        expect(result).toBe("continue")
+        expect(captured.length).toBe(2)
+
+        expect(captured[0]).toContain("MARKERONE")
+        expect(captured[0]).toContain("MARKERTWO")
+        expect(captured[0]).not.toContain("MARKERTHREE")
+
+        expect(captured[1]).toContain("MARKERTHREE")
+        expect(captured[1]).not.toContain("MARKERONE")
+        expect(captured[1]).not.toContain("MARKERTWO")
+        expect(captured[1]).toContain("<prior-summary>")
+        expect(captured[1]).toContain("chunk summary alpha")
+
+        // The intermediate chunk's message is folded away; only the final summary remains.
+        const summaries = (yield* ssn.messages({ sessionID: session.id })).filter(
+          (m) => m.info.role === "assistant" && m.info.summary,
+        )
+        expect(summaries.length).toBe(1)
+        const last = summaries.at(-1)
+        const lastText = last?.parts.find((part): part is SessionV1.TextPart => part.type === "text")?.text
+        expect(lastText).toBe("chunk summary beta")
+        const all = JSON.stringify(yield* ssn.messages({ sessionID: session.id }))
+        expect(all).not.toContain("chunk summary alpha")
+        // tail_turns: 1 pins the retained tail to just "keep this turn",
+        // regardless of the token-budget-based tail selection, so all three
+        // marker turns land in head deterministically.
+      }).pipe(withCompaction({ llm: stub.llmLayer, provider: small, config: cfg({ tail_turns: 1 }) }))
+    },
+    { git: true },
+  )
+
+  itCompaction.instance(
+    "leaves no partial compaction behind when a later chunk is rejected",
+    () => {
+      const stub = llm()
+      stub.push(reply("chunk summary alpha"))
+      stub.push(
+        Stream.fromAsyncIterable(
+          {
+            async *[Symbol.asyncIterator]() {
+              yield LLMEvent.stepStart({ index: 0 })
+              throw new APICallError({
+                message: "prompt is too long: 2000000 tokens > 1000000 maximum",
+                url: "https://example.com/v1/messages",
+                requestBodyValues: {},
+                statusCode: 400,
+                responseHeaders: {},
+                responseBody: '{"error":{"type":"invalid_request_error"}}',
+                isRetryable: false,
+              })
+            },
+          },
+          (err) => err,
+        ),
+      )
+      const small = ProviderTest.fake({ model: createModel({ context: 10_000, output: 1_000 }) })
+
+      return Effect.gen(function* () {
+        const ssn = yield* SessionNs.Service
+        const session = yield* ssn.create({})
+        yield* createUserMessage(session.id, "MARKERONE ".repeat(360))
+        yield* createUserMessage(session.id, "MARKERTWO ".repeat(360))
+        yield* createUserMessage(session.id, "MARKERTHREE ".repeat(360))
+        yield* createUserMessage(session.id, "keep this turn")
+        yield* createCompactionMarker(session.id)
+
+        const msgs = yield* ssn.messages({ sessionID: session.id })
+        const result = yield* SessionCompaction.use.process({
+          parentID: msgs.at(-1)!.info.id,
+          messages: msgs,
+          sessionID: session.id,
+          auto: false,
+        })
+        expect(result).toBe("stop")
+
+        const after = yield* ssn.messages({ sessionID: session.id })
+        const summaries = after.filter((m) => m.info.role === "assistant" && m.info.summary)
+        expect(summaries.length).toBe(1)
+        expect(summaries[0]!.info.role === "assistant" && summaries[0]!.info.finish).toBe("error")
+        expect(JSON.stringify(after)).not.toContain("chunk summary alpha")
+        // Nothing counts as a completed compaction, so the whole history stays in the live window.
+        const live = MessageV2.filterCompacted(yield* MessageV2.stream(session.id))
+        expect(JSON.stringify(live)).toContain("MARKERONE")
+      }).pipe(withCompaction({ llm: stub.llmLayer, provider: small, config: cfg({ tail_turns: 1 }) }))
+    },
+    { git: true },
+  )
+
+  itCompaction.instance(
+    "caps assistant reasoning in the compaction prompt",
+    () => {
+      const stub = llm()
+      let prompt = ""
+      stub.push(
+        reply("summary", (input) => {
+          prompt = JSON.stringify(input.messages)
+        }),
+      )
+
+      return Effect.gen(function* () {
+        const ssn = yield* SessionNs.Service
+        const session = yield* ssn.create({})
+        const user = yield* createUserMessage(session.id, "question")
+        const assistant = yield* createAssistantMessage(session.id, user.id, "/tmp")
+        yield* ssn.updatePart({
+          id: PartID.ascending(),
+          messageID: assistant.id,
+          sessionID: session.id,
+          type: "reasoning",
+          text: `${"THINKING ".repeat(400)}TAILMARKER`,
+          time: { start: Date.now(), end: Date.now() },
+        })
+        yield* createUserMessage(session.id, "keep this turn")
+        yield* createCompactionMarker(session.id)
+
+        const msgs = yield* ssn.messages({ sessionID: session.id })
+        const result = yield* SessionCompaction.use.process({
+          parentID: msgs.at(-1)!.info.id,
+          messages: msgs,
+          sessionID: session.id,
+          auto: false,
+        })
+        expect(result).toBe("continue")
+        expect(prompt).toContain("[Assistant reasoning]: THINKING")
+        expect(prompt).toContain("[truncated]")
+        expect(prompt).not.toContain("TAILMARKER")
+      }).pipe(withCompaction({ llm: stub.llmLayer, config: cfg({ tail_turns: 1 }) }))
+    },
+    { git: true },
+  )
+
+  itCompaction.instance(
     "keeps plugin context outside the serialized conversation",
     () => {
       const stub = llm()
