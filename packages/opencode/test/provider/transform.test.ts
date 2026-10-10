@@ -10,6 +10,25 @@ import { createAmazonBedrock, type AmazonBedrockLanguageModelOptions } from "@ai
 import { createAnthropic } from "@ai-sdk/anthropic"
 import { createVertexAnthropic } from "@ai-sdk/google-vertex/anthropic"
 
+describe("ProviderTransform.maxOutputTokens", () => {
+  const model = (output: number) => ({ limit: { context: 1_000_000, output } }) as any
+
+  test("caps at the global default without a variant", () => {
+    expect(ProviderTransform.maxOutputTokens(model(128_000))).toBe(32_000)
+    expect(ProviderTransform.maxOutputTokens(model(8_192))).toBe(8_192)
+    expect(ProviderTransform.maxOutputTokens(model(0))).toBe(32_000)
+  })
+
+  test("doubles the cap for deep-effort variants when the model allows it", () => {
+    expect(ProviderTransform.maxOutputTokens(model(128_000), undefined, "max")).toBe(64_000)
+    expect(ProviderTransform.maxOutputTokens(model(128_000), undefined, "xhigh")).toBe(64_000)
+    expect(ProviderTransform.maxOutputTokens(model(48_000), undefined, "max")).toBe(48_000)
+    expect(ProviderTransform.maxOutputTokens(model(128_000), undefined, "high")).toBe(32_000)
+    expect(ProviderTransform.maxOutputTokens(model(0), undefined, "max")).toBe(32_000)
+    expect(ProviderTransform.maxOutputTokens(model(128_000), 20_000, "max")).toBe(40_000)
+  })
+})
+
 describe("ProviderTransform.options - setCacheKey", () => {
   const sessionID = "test-session-123"
 

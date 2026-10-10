@@ -1478,8 +1478,13 @@ export function providerOptions(model: Provider.Model, options: { [x: string]: a
   return { [key]: normalized }
 }
 
-export function maxOutputTokens(model: Provider.Model, outputTokenMax = OUTPUT_TOKEN_MAX): number {
-  return Math.min(model.limit.output, outputTokenMax) || outputTokenMax
+// Adaptive-thinking tiers that can spend the whole output budget on reasoning before answering.
+const DEEP_EFFORT_VARIANTS = new Set(["xhigh", "max"])
+
+export function maxOutputTokens(model: Provider.Model, outputTokenMax = OUTPUT_TOKEN_MAX, variant?: string): number {
+  const base = Math.min(model.limit.output, outputTokenMax) || outputTokenMax
+  if (!variant || !DEEP_EFFORT_VARIANTS.has(variant) || !model.limit.output) return base
+  return Math.min(model.limit.output, outputTokenMax * 2)
 }
 
 type JsonRecord = Record<string, unknown>
