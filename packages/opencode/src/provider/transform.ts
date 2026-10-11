@@ -1481,10 +1481,13 @@ export function providerOptions(model: Provider.Model, options: { [x: string]: a
 // Adaptive-thinking tiers that can spend the whole output budget on reasoning before answering.
 const DEEP_EFFORT_VARIANTS = new Set(["xhigh", "max"])
 
-export function maxOutputTokens(model: Provider.Model, outputTokenMax = OUTPUT_TOKEN_MAX, variant?: string): number {
-  const base = Math.min(model.limit.output, outputTokenMax) || outputTokenMax
-  if (!variant || !DEEP_EFFORT_VARIANTS.has(variant) || !model.limit.output) return base
-  return Math.min(model.limit.output, outputTokenMax * 2)
+// `outputTokenMax` is the explicit override (flag); when absent the global default applies, except
+// that deep-effort variants may use the model's declared output limit so a long think can finish.
+export function maxOutputTokens(model: Provider.Model, outputTokenMax?: number, variant?: string): number {
+  const cap = outputTokenMax ?? OUTPUT_TOKEN_MAX
+  const base = Math.min(model.limit.output, cap) || cap
+  if (outputTokenMax !== undefined || !variant || !DEEP_EFFORT_VARIANTS.has(variant)) return base
+  return Math.max(base, model.limit.output || 0)
 }
 
 type JsonRecord = Record<string, unknown>

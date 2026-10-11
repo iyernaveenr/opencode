@@ -19,13 +19,14 @@ describe("ProviderTransform.maxOutputTokens", () => {
     expect(ProviderTransform.maxOutputTokens(model(0))).toBe(32_000)
   })
 
-  test("doubles the cap for deep-effort variants when the model allows it", () => {
-    expect(ProviderTransform.maxOutputTokens(model(128_000), undefined, "max")).toBe(64_000)
-    expect(ProviderTransform.maxOutputTokens(model(128_000), undefined, "xhigh")).toBe(64_000)
+  test("lets deep-effort variants use the model's declared output limit unless a flag caps it", () => {
+    expect(ProviderTransform.maxOutputTokens(model(128_000), undefined, "max")).toBe(128_000)
+    expect(ProviderTransform.maxOutputTokens(model(128_000), undefined, "xhigh")).toBe(128_000)
     expect(ProviderTransform.maxOutputTokens(model(48_000), undefined, "max")).toBe(48_000)
+    expect(ProviderTransform.maxOutputTokens(model(8_192), undefined, "max")).toBe(8_192)
     expect(ProviderTransform.maxOutputTokens(model(128_000), undefined, "high")).toBe(32_000)
     expect(ProviderTransform.maxOutputTokens(model(0), undefined, "max")).toBe(32_000)
-    expect(ProviderTransform.maxOutputTokens(model(128_000), 20_000, "max")).toBe(40_000)
+    expect(ProviderTransform.maxOutputTokens(model(128_000), 20_000, "max")).toBe(20_000)
   })
 })
 

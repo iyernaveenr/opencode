@@ -1319,6 +1319,22 @@ const layer = Layer.effect(
                 yield* events.publish(Session.Event.Error, { sessionID, error: handle.message.error })
                 return "break" as const
               }
+              // A turn that hit the output limit with nothing visible (the whole budget went to
+              // reasoning) used to leave the session idle with no explanation.
+              if (handle.message.finish === "length" && handle.message.tokens.output === 0) {
+                const reasoning = handle.message.tokens.reasoning
+                handle.message.error = new SessionV1.APIError({
+                  message:
+                    reasoning > 0
+                      ? `The model spent its entire output budget (${reasoning} tokens) on reasoning and produced no reply. Lower the thinking effort (model variant) or ask a narrower question.`
+                      : "The response hit the output limit before producing any reply.",
+                  isRetryable: false,
+                  metadata: { reason: "max_tokens", reasoning: String(reasoning) },
+                }).toObject()
+                yield* sessions.updateMessage(handle.message)
+                yield* events.publish(Session.Event.Error, { sessionID, error: handle.message.error })
+                return "break" as const
+              }
               if (format.type === "json_schema") {
                 handle.message.error = new SessionV1.StructuredOutputError({
                   message: "Model did not produce structured output",
