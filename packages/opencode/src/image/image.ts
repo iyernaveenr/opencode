@@ -50,8 +50,12 @@ export class SizeError extends Schema.TaggedErrorClass<SizeError>()("ImageSizeEr
 
 export type Error = ResizerUnavailableError | InvalidDataUrlError | DecodeError | SizeError
 
+export type Limits = { maxWidth: number; maxHeight: number; maxBase64Bytes: number }
+
 export interface Interface {
   readonly normalize: (input: SessionV1.FilePart) => Effect.Effect<SessionV1.FilePart, Error>
+  // Re-encodes an inline image down to the given limits; returns the input when it already fits.
+  readonly shrink: <T extends { url: string; mime: string }>(input: T, limits: Limits) => Effect.Effect<T, Error>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Image") {}
@@ -72,14 +76,10 @@ const layer = Layer.effect(
       ),
     )
 
-    const normalize = Effect.fn("Image.normalize")(function* (input: SessionV1.FilePart) {
-      const image = (yield* config.get()).attachment?.image
-      const info = {
-        autoResize: image?.auto_resize ?? AUTO_RESIZE,
-        maxWidth: image?.max_width ?? MAX_WIDTH,
-        maxHeight: image?.max_height ?? MAX_HEIGHT,
-        maxBase64Bytes: image?.max_base64_bytes ?? MAX_BASE64_BYTES,
-      }
+    const fit = Effect.fn("Image.fit")(function* <T extends { url: string; mime: string }>(
+      input: T,
+      info: Limits & { autoResize: boolean },
+    ) {
       if (!input.url.startsWith("data:") || !input.url.includes(";base64,"))
         return yield* new InvalidDataUrlError({ url: input.url })
 
@@ -163,7 +163,20 @@ const layer = Layer.effect(
       }
     })
 
-    return Service.of({ normalize })
+    const normalize = Effect.fn("Image.normalize")(function* (input: SessionV1.FilePart) {
+      const image = (yield* config.get()).attachment?.image
+      return yield* fit(input, {
+        autoResize: image?.auto_resize ?? AUTO_RESIZE,
+        maxWidth: image?.max_width ?? MAX_WIDTH,
+        maxHeight: image?.max_height ?? MAX_HEIGHT,
+        maxBase64Bytes: image?.max_base64_bytes ?? MAX_BASE64_BYTES,
+      })
+    })
+
+    const shrink = <T extends { url: string; mime: string }>(input: T, limits: Limits) =>
+      fit(input, { ...limits, autoResize: true })
+
+    return Service.of({ normalize, shrink })
   }),
 )
 

@@ -130,6 +130,7 @@ const layer = Layer.effect(
     const registry = yield* ToolRegistry.Service
     const truncate = yield* Truncate.Service
     const image = yield* Image.Service
+    const shrinkMedia = RequestSize.shrinker(image)
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
     const scope = yield* Scope.Scope
     const instruction = yield* Instruction.Service
@@ -1263,14 +1264,15 @@ const layer = Layer.effect(
               MessageV2.toModelMessagesEffect(msgs, model),
             ])
             // Providers cap the request body in bytes independently of tokens; inline images
-            // from old turns are what pushes a long session over it. Drop them before sending
-            // rather than letting a 413 trigger a compaction.
-            const trimmed = RequestSize.trimMedia(modelMsgs, flags.requestBytesMax)
-            if (trimmed.removed > 0)
-              yield* Effect.logInfo("trimmed request media", {
+            // from old turns are what pushes a long session over it. Shrink them, and only if
+            // that is not enough drop the oldest, rather than letting a 413 trigger a compaction.
+            const fitted = yield* RequestSize.fitMedia(modelMsgs, flags.requestBytesMax, shrinkMedia)
+            if (fitted.shrunk > 0 || fitted.removed > 0)
+              yield* Effect.logInfo("fitted request media", {
                 "session.id": sessionID,
-                removed: trimmed.removed,
-                bytes: trimmed.bytes,
+                shrunk: fitted.shrunk,
+                removed: fitted.removed,
+                bytes: fitted.bytes,
               })
             const system = [
               ...env,
@@ -1288,7 +1290,7 @@ const layer = Layer.effect(
               parentSessionID: session.parentID,
               system,
               messages: [
-                ...trimmed.messages,
+                ...fitted.messages,
                 ...(isLastStep ? [{ role: "assistant" as const, content: MAX_STEPS_PROMPT }] : []),
               ],
               tools,

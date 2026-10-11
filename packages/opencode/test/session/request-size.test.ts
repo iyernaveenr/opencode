@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { ModelMessage } from "ai"
-import { trimMedia, REQUEST_BYTES_MAX } from "../../src/session/request-size"
+import { Effect } from "effect"
+import { trimMedia, fitMedia, shrinker, REQUEST_BYTES_MAX, type Media } from "../../src/session/request-size"
 
 const png = (size: number) => `data:image/png;base64,${"A".repeat(size)}`
 
@@ -93,5 +94,87 @@ describe("request-size trimMedia", () => {
 
   test("default budget stays under the 32 MB provider cap", () => {
     expect(REQUEST_BYTES_MAX).toBeLessThan(32 * 1024 * 1024)
+  })
+})
+
+describe("request-size fitMedia", () => {
+  // Stands in for the image service: every image becomes a 50-byte JPEG data URL.
+  const tiny = (_item: Media) =>
+    Effect.succeed({ data: `data:image/jpeg;base64,${"j".repeat(50 - 23)}`, mediaType: "image/jpeg" })
+
+  test("shrinks old images before dropping anything and keeps the newest two untouched", async () => {
+    const messages = [
+      user("first", png(1_000)),
+      toolResult("t1", "render", png(1_000), png(1_000)),
+      user("last", png(1_000)),
+    ]
+    const result = await Effect.runPromise(fitMedia(messages, 2_600, tiny))
+    expect(result.removed).toBe(0)
+    expect(result.shrunk).toBe(2)
+    expect(result.bytes).toBeLessThanOrEqual(2_600)
+    expect(mediaCount(result.messages)).toBe(4)
+    expect(mediaCount(messages)).toBe(4)
+
+    const [first, tool, last] = result.messages
+    expect(JSON.stringify(first)).toContain("image/jpeg")
+    expect(JSON.stringify(last)).not.toContain("image/jpeg")
+    const text = JSON.stringify(tool)
+    // First tool image shrunk (bare base64, jpeg type), second kept full size.
+    expect(text).toContain('"mediaType":"image/jpeg"')
+    expect(text).toContain('"mediaType":"image/png"')
+    expect(text).not.toContain("data:image/jpeg")
+  })
+
+  test("drops only when shrinking is not enough, and newest images last", async () => {
+    const messages = [user("a", png(1_000)), user("b", png(1_000)), user("c", png(1_000))]
+    // Shrinking the one eligible image (the newest two are kept) is not enough; the drop stage
+    // then skips the already-shrunk image and removes the next oldest full-size one.
+    const result = await Effect.runPromise(fitMedia(messages, 1_200, tiny))
+    expect(result.shrunk).toBe(1)
+    expect(result.removed).toBe(1)
+    expect(result.bytes).toBeLessThanOrEqual(1_200)
+    expect(mediaCount(result.messages)).toBe(2)
+    expect(JSON.stringify(result.messages[0])).toContain("image/jpeg")
+    expect(JSON.stringify(result.messages[1])).toContain("image removed")
+    expect(JSON.stringify(result.messages[2])).toContain("image/png")
+  })
+
+  test("falls back to dropping when no shrinker is available or it declines", async () => {
+    const messages = [user("a", png(1_000)), user("b", png(1_000)), user("c", png(1_000)), user("d", png(1_000))]
+    const none = await Effect.runPromise(fitMedia(messages, 1_400))
+    expect(none.shrunk).toBe(0)
+    expect(none.removed).toBe(3)
+    const declines = await Effect.runPromise(fitMedia(messages, 1_400, () => Effect.succeed(undefined)))
+    expect(declines.shrunk).toBe(0)
+    expect(declines.removed).toBe(3)
+  })
+
+  test("returns the input untouched when it fits", async () => {
+    const messages = [user("a", png(100))]
+    const result = await Effect.runPromise(fitMedia(messages, 10_000, tiny))
+    expect(result.messages).toBe(messages)
+    expect(result.shrunk).toBe(0)
+  })
+
+  test("shrinker caches by original bytes and treats service errors as a decline", async () => {
+    let calls = 0
+    const shrink = shrinker({
+      normalize: (input) => Effect.succeed(input),
+      shrink: (input) =>
+        Effect.sync(() => {
+          calls++
+          if (input.url.includes("BAD")) throw new Error("decode")
+          return { ...input, url: "data:image/jpeg;base64,xx", mime: "image/jpeg" }
+        }),
+    })
+    const ok: Media = { data: png(200), mediaType: "image/png" }
+    const bad: Media = { data: `data:image/png;base64,BAD${"A".repeat(200)}`, mediaType: "image/png" }
+    const first = await Effect.runPromise(shrink(ok))
+    const second = await Effect.runPromise(shrink(ok))
+    expect(first).toEqual({ data: "data:image/jpeg;base64,xx", mediaType: "image/jpeg" })
+    expect(second).toEqual(first)
+    expect(await Effect.runPromise(shrink(bad))).toBeUndefined()
+    expect(await Effect.runPromise(shrink(bad))).toBeUndefined()
+    expect(calls).toBe(2)
   })
 })

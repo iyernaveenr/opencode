@@ -27,6 +27,35 @@ function part(mime: string, data: string) {
 }
 
 describe("Image", () => {
+  it.effect("shrinks an image to explicit limits and leaves small ones alone", () =>
+    Effect.gen(function* () {
+      const photon = yield* Effect.promise(() => import("@silvia-odwyer/photon-node"))
+      const source = new photon.PhotonImage(
+        new Uint8Array(Array.from({ length: 1_600 * 1_200 * 4 }, (_, i) => (i * 7) % 256)),
+        1_600,
+        1_200,
+      )
+      const image = yield* Image.Service
+      const input = {
+        url: `data:image/png;base64,${Buffer.from(source.get_bytes()).toString("base64")}`,
+        mime: "image/png",
+      }
+      source.free()
+      const result = yield* image.shrink(input, { maxWidth: 400, maxHeight: 400, maxBase64Bytes: 60_000 })
+      const decoded = photon.PhotonImage.new_from_byteslice(
+        Buffer.from(result.url.slice(result.url.indexOf(";base64,") + ";base64,".length), "base64"),
+      )
+      expect(decoded.get_width()).toBeLessThanOrEqual(400)
+      expect(decoded.get_height()).toBeLessThanOrEqual(400)
+      decoded.free()
+      expect(result.url.length).toBeLessThanOrEqual(60_000 + "data:image/jpeg;base64,".length)
+
+      const small = { url: input.url, mime: "image/png" }
+      expect(yield* image.shrink(small, { maxWidth: 4_000, maxHeight: 4_000, maxBase64Bytes: 50 * 1024 * 1024 })).toBe(
+        small,
+      )
+    }),
+  )
   it.effect("normalizes generated png and jpeg attachments", () =>
     Effect.gen(function* () {
       const photon = yield* Effect.promise(() => import("@silvia-odwyer/photon-node"))
