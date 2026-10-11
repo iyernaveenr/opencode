@@ -5,6 +5,7 @@ import { SessionV1 } from "@opencode-ai/core/v1/session"
 import os from "os"
 import { SessionID, MessageID, PartID } from "./schema"
 import { MessageV2 } from "./message-v2"
+import * as RequestSize from "./request-size"
 import { SessionRevert } from "./revert"
 import { Session } from "./session"
 import { Agent } from "../agent/agent"
@@ -1261,6 +1262,16 @@ const layer = Layer.effect(
               sys.mcp(agent, session.permission),
               MessageV2.toModelMessagesEffect(msgs, model),
             ])
+            // Providers cap the request body in bytes independently of tokens; inline images
+            // from old turns are what pushes a long session over it. Drop them before sending
+            // rather than letting a 413 trigger a compaction.
+            const trimmed = RequestSize.trimMedia(modelMsgs, flags.requestBytesMax)
+            if (trimmed.removed > 0)
+              yield* Effect.logInfo("trimmed request media", {
+                "session.id": sessionID,
+                removed: trimmed.removed,
+                bytes: trimmed.bytes,
+              })
             const system = [
               ...env,
               ...instructions,
@@ -1277,7 +1288,7 @@ const layer = Layer.effect(
               parentSessionID: session.parentID,
               system,
               messages: [
-                ...modelMsgs,
+                ...trimmed.messages,
                 ...(isLastStep ? [{ role: "assistant" as const, content: MAX_STEPS_PROMPT }] : []),
               ],
               tools,

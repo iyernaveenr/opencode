@@ -312,6 +312,17 @@ describe("RuntimeFlags", () => {
     )
   }
 
+  it.effect("parses requestBytesMax from config", () =>
+    Effect.gen(function* () {
+      const unset = yield* readFlags.pipe(Effect.provide(fromConfig({})))
+      expect(unset.requestBytesMax).toBeUndefined()
+      const set = yield* readFlags.pipe(
+        Effect.provide(fromConfig({ OPENCODE_EXPERIMENTAL_REQUEST_BYTES_MAX: "8000000" })),
+      )
+      expect(set.requestBytesMax).toBe(8_000_000)
+    }),
+  )
+
   it.effect("layer ignores the active ConfigProvider for omitted test overrides", () =>
     Effect.gen(function* () {
       const flags = yield* readFlags.pipe(
