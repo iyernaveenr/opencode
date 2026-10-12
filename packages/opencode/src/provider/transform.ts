@@ -1480,14 +1480,20 @@ export function providerOptions(model: Provider.Model, options: { [x: string]: a
 
 // Adaptive-thinking tiers that can spend the whole output budget on reasoning before answering.
 const DEEP_EFFORT_VARIANTS = new Set(["xhigh", "max"])
+// Ceiling for those tiers. Some registry entries declare output == context (Kimi K3: 1M/1M), so
+// the declared output limit alone would leave no room for the conversation itself.
+const DEEP_EFFORT_OUTPUT_MAX = 128_000
 
 // `outputTokenMax` is the explicit override (flag); when absent the global default applies, except
-// that deep-effort variants may use the model's declared output limit so a long think can finish.
+// that deep-effort variants get a larger ceiling so a long think can finish. The ceiling never
+// takes more than half the context window.
 export function maxOutputTokens(model: Provider.Model, outputTokenMax?: number, variant?: string): number {
   const cap = outputTokenMax ?? OUTPUT_TOKEN_MAX
   const base = Math.min(model.limit.output, cap) || cap
   if (outputTokenMax !== undefined || !variant || !DEEP_EFFORT_VARIANTS.has(variant)) return base
-  return Math.max(base, model.limit.output || 0)
+  const room = model.limit.context > 0 ? Math.floor(model.limit.context / 2) : DEEP_EFFORT_OUTPUT_MAX
+  const deep = Math.min(model.limit.output || DEEP_EFFORT_OUTPUT_MAX, DEEP_EFFORT_OUTPUT_MAX, room)
+  return Math.max(base, deep)
 }
 
 type JsonRecord = Record<string, unknown>

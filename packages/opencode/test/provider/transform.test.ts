@@ -19,14 +19,19 @@ describe("ProviderTransform.maxOutputTokens", () => {
     expect(ProviderTransform.maxOutputTokens(model(0))).toBe(32_000)
   })
 
-  test("lets deep-effort variants use the model's declared output limit unless a flag caps it", () => {
+  test("raises the ceiling for deep-effort variants without starving the context window", () => {
     expect(ProviderTransform.maxOutputTokens(model(128_000), undefined, "max")).toBe(128_000)
     expect(ProviderTransform.maxOutputTokens(model(128_000), undefined, "xhigh")).toBe(128_000)
     expect(ProviderTransform.maxOutputTokens(model(48_000), undefined, "max")).toBe(48_000)
     expect(ProviderTransform.maxOutputTokens(model(8_192), undefined, "max")).toBe(8_192)
     expect(ProviderTransform.maxOutputTokens(model(128_000), undefined, "high")).toBe(32_000)
-    expect(ProviderTransform.maxOutputTokens(model(0), undefined, "max")).toBe(32_000)
+    expect(ProviderTransform.maxOutputTokens(model(0), undefined, "max")).toBe(128_000)
     expect(ProviderTransform.maxOutputTokens(model(128_000), 20_000, "max")).toBe(20_000)
+    // Registry entries that declare output == context (Kimi K3) must not consume the whole window.
+    const kimi = { limit: { context: 1_048_576, output: 1_048_576 } } as any
+    expect(ProviderTransform.maxOutputTokens(kimi, undefined, "max")).toBe(128_000)
+    const small = { limit: { context: 200_000, output: 128_000 } } as any
+    expect(ProviderTransform.maxOutputTokens(small, undefined, "max")).toBe(100_000)
   })
 })
 
