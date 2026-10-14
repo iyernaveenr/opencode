@@ -1085,6 +1085,8 @@ const layer = Layer.effect(
         const ctx = yield* InstanceState.context
         let structured: unknown
         let step = 0
+        // User messages whose blank reply was already retried once.
+        const retried = new Set<MessageID>()
         const session = yield* sessions.get(sessionID).pipe(Effect.orDie)
 
         while (true) {
@@ -1342,6 +1344,45 @@ const layer = Layer.effect(
                 }).toObject()
                 yield* sessions.updateMessage(handle.message)
                 return "break" as const
+              }
+              // A plain "stop" with nothing visible (a reasoning model that wrote its whole answer
+              // into the thinking channel, or a bare empty completion) also used to leave the
+              // session idle with no explanation. Retry the step once; if it happens again, say so.
+              if (handle.message.finish === "stop") {
+                const parts = yield* MessageV2.parts(handle.message.id).pipe(
+                  Effect.provideService(Database.Service, database),
+                )
+                const blank = parts.every(
+                  (part) =>
+                    part.type === "step-start" ||
+                    part.type === "step-finish" ||
+                    part.type === "reasoning" ||
+                    (part.type === "text" && part.text.trim() === ""),
+                )
+                if (blank) {
+                  const reasoning = handle.message.tokens.reasoning
+                  if (!retried.has(lastUser.id)) {
+                    retried.add(lastUser.id)
+                    yield* Effect.logWarning("blank reply, retrying once", {
+                      "session.id": sessionID,
+                      messageID: handle.message.id,
+                      reasoning,
+                    })
+                    yield* sessions.removeMessage({ sessionID, messageID: handle.message.id })
+                    return "continue" as const
+                  }
+                  handle.message.error = new SessionV1.APIError({
+                    message:
+                      reasoning > 0
+                        ? `The model finished twice without producing a reply; everything it generated (${reasoning} tokens on the last attempt) went into its reasoning. Retry, or lower the thinking effort (model variant).`
+                        : "The model finished twice without producing a reply. Retry, or try a different model.",
+                    isRetryable: false,
+                    metadata: { reason: "empty_reply", reasoning: String(reasoning) },
+                  }).toObject()
+                  yield* sessions.updateMessage(handle.message)
+                  yield* events.publish(Session.Event.Error, { sessionID, error: handle.message.error })
+                  return "break" as const
+                }
               }
             }
 

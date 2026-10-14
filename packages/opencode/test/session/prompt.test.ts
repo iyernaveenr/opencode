@@ -712,6 +712,75 @@ it.instance("loop surfaces a turn that spent its whole output budget on reasonin
   }),
 )
 
+it.instance("loop retries once when the model stops with nothing visible", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Blank reply" })
+
+    yield* prompt.prompt({
+      sessionID: chat.id,
+      agent: "build",
+      model: ref,
+      noReply: true,
+      parts: [{ type: "text", text: "hello" }],
+    })
+    yield* llm.push(reply().reason("answer written only in the thinking channel").stop())
+    yield* llm.push(reply().text("here is the answer").stop())
+
+    const result = yield* prompt.loop({ sessionID: chat.id })
+    const messages = yield* sessions.messages({ sessionID: chat.id })
+
+    expect(yield* llm.hits).toHaveLength(2)
+    expect(result.info.role).toBe("assistant")
+    if (result.info.role === "assistant") {
+      expect(result.info.error).toBeUndefined()
+      expect(result.parts.some((part) => part.type === "text" && part.text === "here is the answer")).toBe(true)
+    }
+    expect(messages.filter((message) => message.info.role === "assistant")).toHaveLength(1)
+  }),
+)
+
+it.instance("loop surfaces a turn that stops with nothing visible twice as a session error", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const events = yield* EventV2Bridge.Service
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Blank twice" })
+    const errors: NonNullable<SessionV1.Assistant["error"]>[] = []
+    const off = yield* events.listen((event) => {
+      if (event.type !== Session.Event.Error.type) return Effect.void
+      const data = event.data as typeof Session.Event.Error.data.Type
+      if (data.sessionID === chat.id && data.error) errors.push(data.error)
+      return Effect.void
+    })
+
+    yield* prompt.prompt({
+      sessionID: chat.id,
+      agent: "build",
+      model: ref,
+      noReply: true,
+      parts: [{ type: "text", text: "hello" }],
+    })
+    yield* llm.push(reply().reason("first blank").stop())
+    yield* llm.push(reply().reason("second blank").stop())
+
+    const result = yield* prompt.loop({ sessionID: chat.id })
+    yield* off
+
+    expect(yield* llm.hits).toHaveLength(2)
+    expect(result.info.role).toBe("assistant")
+    if (result.info.role === "assistant") {
+      expect(result.info.finish).toBe("stop")
+      expect(result.info.error?.name).toBe("APIError")
+      expect(JSON.stringify(result.info.error)).toContain("without producing a reply")
+      expect(errors).toHaveLength(1)
+    }
+  }),
+)
+
 it.instance("loop stops provider overflow instead of auto-compacting when disabled", () =>
   Effect.gen(function* () {
     const { llm } = yield* useServerConfig((url) => ({
