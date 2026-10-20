@@ -44,11 +44,11 @@ export function assignTabGroup(groups: TabGroups, key: string, groupID: string |
   return { ...next, [groupID]: { ...group, tabs: [...group.tabs.filter((item) => item !== key), key] } }
 }
 
-/** Keep only members that still have a tab; groups left empty disappear. */
-export function pruneTabGroups(groups: TabGroups, keys: Set<string>): TabGroups {
+/** Keep only members accepted by `keep`; groups left empty disappear. */
+export function pruneTabGroups(groups: TabGroups, keep: (key: string) => boolean): TabGroups {
   return Object.fromEntries(
     Object.values(groups).flatMap((group) => {
-      const tabs = group.tabs.filter((key) => keys.has(key))
+      const tabs = group.tabs.filter(keep)
       if (tabs.length === 0) return []
       return [[group.id, tabs.length === group.tabs.length ? group : { ...group, tabs }]]
     }),

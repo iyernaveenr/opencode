@@ -128,10 +128,15 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
       )
     }
 
-    const forget = (key: string) => {
+    // Closing a tab keeps its group membership so reopening the session restores it;
+    // only a session that is gone for good (deleted, archived, missing, server removed)
+    // leaves its group.
+    const forget = (key: string, gone: boolean) => {
       removeInfo(key)
-      if (groupForTab(groups, key)) setGroups(reconcile(removeTabFromGroups(groups, key)))
+      if (gone && groupForTab(groups, key)) setGroups(reconcile(removeTabFromGroups(groups, key)))
     }
+
+    const onKnownServer = (key: string) => server.list.some((item) => key.startsWith(`${ServerConnection.key(item)}\n`))
 
     onCleanup(memory.dispose)
 
@@ -144,7 +149,7 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
           if (!servers.has(tab.server)) {
             const key = tabKey(tab)
             memory.remove(key)
-            forget(key)
+            forget(key, true)
           }
         }
         setStore(() => next)
@@ -154,7 +159,7 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
       for (const key of Object.keys(info)) {
         if (!keys.has(key)) removeInfo(key)
       }
-      const pruned = pruneTabGroups(groups, keys)
+      const pruned = pruneTabGroups(groups, onKnownServer)
       if (Object.values(groups).some((group) => pruned[group.id] !== group)) setGroups(reconcile(pruned))
     })
 
@@ -171,7 +176,7 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
       navigate(href)
     }
 
-    const removeTab = (index: number) => {
+    const removeTab = (index: number, gone = true) => {
       const tab = store[index]
       if (!tab) return
       const key = tabKey(tab)
@@ -191,7 +196,7 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
         if (nextTab) navigateTab(nextTab)
       }).finally(() => closing.delete(key))
       memory.remove(key)
-      forget(key)
+      forget(key, gone)
       if (draftID) removeDraftPersisted(draftID)
     }
 
@@ -273,7 +278,7 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
         const tab = store[index]
         if (!tab) return
         if (tab.type === "session") updateClosed((stack) => pushClosedTab(stack, tab, index))
-        removeTab(index)
+        removeTab(index, false)
       },
       reopenClosedTab() {
         if (!closedReady()) {
@@ -309,7 +314,7 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
         const removed = store.filter((tab) => tab.server === key).map(tabKey)
         setStore((tabs) => tabs.filter((tab) => tab.server !== key))
         for (const key of removed) memory.remove(key)
-        for (const key of removed) forget(key)
+        for (const key of removed) forget(key, true)
         if (recent.key && removed.includes(recent.key)) setRecentKey(undefined)
         for (const draftID of drafts) removeDraftPersisted(draftID)
         if (server.key === key) navigate("/")
@@ -317,11 +322,9 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
       removeSessions: (input: SessionTabsRemovedDetail) => {
         const targetServer = input.server ?? server.key
         updateClosed((stack) => removeClosedTabs(stack, targetServer, input.sessionIDs))
-        const removed = store
-          .filter(
-            (tab) => tab.type === "session" && tab.server === targetServer && input.sessionIDs.includes(tab.sessionId),
-          )
-          .map(tabKey)
+        // Membership is keyed by session, so closed members of removed sessions must go too.
+        const keys = input.sessionIDs.map((sessionId) => tabKey({ type: "session", server: targetServer, sessionId }))
+        const removed = keys.filter((key) => store.some((tab) => tabKey(tab) === key))
         void startTransition(() => {
           setStore(
             produce((tabs) => {
@@ -364,7 +367,7 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
           if (recent.key && removed.includes(recent.key)) setRecentKey(undefined)
         })
         for (const key of removed) memory.remove(key)
-        for (const key of removed) forget(key)
+        for (const key of keys) forget(key, true)
       },
       rememberSessionInfo(tab: SessionTab, session: Session) {
         const key = tabKey(tab)

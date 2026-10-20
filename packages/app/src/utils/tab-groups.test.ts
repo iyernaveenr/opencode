@@ -42,11 +42,11 @@ describe("tab groups", () => {
     expect(Object.keys(groups).sort()).toEqual(["g1", "g2"])
   })
 
-  test("prune drops members without tabs and empty groups", () => {
-    const groups = pruneTabGroups(seed(), new Set(["a"]))
+  test("prune drops rejected members and empty groups, keeping untouched groups by identity", () => {
+    const groups = pruneTabGroups(seed(), (key) => key === "a")
     expect(Object.keys(groups)).toEqual(["g1"])
     expect(groups.g1.tabs).toEqual(["a"])
     const same = seed()
-    expect(pruneTabGroups(same, new Set(["a", "b", "c"])).g1).toBe(same.g1)
+    expect(pruneTabGroups(same, () => true).g1).toBe(same.g1)
   })
 })
