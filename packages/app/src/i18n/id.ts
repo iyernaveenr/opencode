@@ -135,6 +135,7 @@ export const dict = {
   "command.session.previous.unseen": "Sesi sebelumnya yang belum dibaca",
   "command.session.next.unseen": "Sesi berikutnya yang belum dibaca",
   "command.session.archive": "Arsipkan sesi",
+  "command.session.find": "Cari di sesi",
 
   "command.palette": "Palet perintah",
 
@@ -814,6 +815,12 @@ export const dict = {
   "session.followupDock.summary.one": "{{count}} pesan dalam antrean",
   "session.followupDock.summary.other": "{{count}} pesan dalam antrean",
   "session.followupDock.sendNow": "Kirim sekarang",
+  "session.find.placeholder": "Cari di sesi",
+  "session.find.count": "{{current}} dari {{total}}",
+  "session.find.none": "Tidak ada yang cocok",
+  "session.find.previous": "Kecocokan sebelumnya",
+  "session.find.next": "Kecocokan berikutnya",
+  "session.find.loadOlder": "Muat pesan sebelumnya",
   "session.followupDock.edit": "Sunting",
   "session.followupDock.collapse": "Ciutkan pesan dalam antrean",
   "session.followupDock.expand": "Bentangkan pesan dalam antrean",

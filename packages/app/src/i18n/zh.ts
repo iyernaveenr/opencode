@@ -142,6 +142,7 @@ export const dict = {
   "command.session.previous.unseen": "上一个未读会话",
   "command.session.next.unseen": "下一个未读会话",
   "command.session.archive": "归档会话",
+  "command.session.find": "在会话中查找",
 
   "command.palette": "命令面板",
 
@@ -779,6 +780,12 @@ export const dict = {
   "session.followupDock.summary.one": "{{count}} 条排队消息",
   "session.followupDock.summary.other": "{{count}} 条排队消息",
   "session.followupDock.sendNow": "立即发送",
+  "session.find.placeholder": "在会话中查找",
+  "session.find.count": "第 {{current}} 项，共 {{total}} 项",
+  "session.find.none": "无匹配项",
+  "session.find.previous": "上一个匹配项",
+  "session.find.next": "下一个匹配项",
+  "session.find.loadOlder": "加载更早的消息",
   "session.followupDock.edit": "编辑",
   "session.followupDock.collapse": "折叠排队消息",
   "session.followupDock.expand": "展开排队消息",

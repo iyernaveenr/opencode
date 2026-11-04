@@ -34,6 +34,7 @@ export const dict = {
   "command.session.previous.unseen": "Forrige ulæste session",
   "command.session.next.unseen": "Næste ulæste session",
   "command.session.archive": "Arkivér session",
+  "command.session.find": "Søg i sessionen",
 
   "command.palette": "Kommandopalette",
 
@@ -668,6 +669,12 @@ export const dict = {
   "session.followupDock.summary.one": "{{count}} besked i kø",
   "session.followupDock.summary.other": "{{count}} beskeder i kø",
   "session.followupDock.sendNow": "Send nu",
+  "session.find.placeholder": "Søg i sessionen",
+  "session.find.count": "{{current}} af {{total}}",
+  "session.find.none": "Ingen match",
+  "session.find.previous": "Forrige match",
+  "session.find.next": "Næste match",
+  "session.find.loadOlder": "Indlæs ældre beskeder",
   "session.followupDock.edit": "Rediger",
   "session.followupDock.collapse": "Skjul beskeder i kø",
   "session.followupDock.expand": "Udvid beskeder i kø",

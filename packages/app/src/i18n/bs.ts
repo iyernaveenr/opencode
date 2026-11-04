@@ -135,6 +135,7 @@ export const dict = {
   "command.session.previous.unseen": "Prethodna nepročitana sesija",
   "command.session.next.unseen": "Sljedeća nepročitana sesija",
   "command.session.archive": "Arhiviraj sesiju",
+  "command.session.find": "Pretraži sesiju",
 
   "command.palette": "Paleta komandi",
 
@@ -792,6 +793,12 @@ export const dict = {
   "session.followupDock.summary.few": "{{count}} poruke na čekanju",
   "session.followupDock.summary.other": "{{count}} poruka na čekanju",
   "session.followupDock.sendNow": "Pošalji sada",
+  "session.find.placeholder": "Pretraži sesiju",
+  "session.find.count": "{{current}} od {{total}}",
+  "session.find.none": "Nema podudaranja",
+  "session.find.previous": "Prethodno podudaranje",
+  "session.find.next": "Sljedeće podudaranje",
+  "session.find.loadOlder": "Učitaj starije poruke",
   "session.followupDock.edit": "Uredi",
   "session.followupDock.collapse": "Sažmi poruke na čekanju",
   "session.followupDock.expand": "Proširi poruke na čekanju",

@@ -252,7 +252,7 @@ export function MessageTimeline(props: {
   setContentRef: (el: HTMLDivElement) => void
   userMessages: UserMessage[]
   anchor: (id: string) => string
-  setRevealMessage?: (fn: (id: string) => void) => void
+  setRevealMessage?: (fn: (id: string, partID?: string) => void) => void
   setScrollToEnd?: (fn: () => void) => void
   setHistoryAnchor?: (handlers: { capture: () => void; restore: (done: boolean) => void }) => void
 }) {
@@ -345,6 +345,13 @@ export function MessageTimeline(props: {
   const messageByID = projection.messageByID
   const messageLastRowIndex = projection.messageLastRowIndex
   const messageRowIndex = projection.messageRowIndex
+  const partRowIndex = createMemo(() => {
+    const result = new Map<string, number>()
+    projection.rows().forEach((row, index) => {
+      if (row._tag === "AssistantPart" && row.group.type === "part") result.set(row.group.ref.partID, index)
+    })
+    return result
+  })
   const timelineRowByKey = projection.rowByKey
   const timelineRows = projection.rows
 
@@ -498,8 +505,8 @@ export function MessageTimeline(props: {
   )
   const virtualRowKeys = createMemo(() => virtualizer.getVirtualItems().map((item) => item.key as string))
   createEffect(() => {
-    props.setRevealMessage?.((id) => {
-      const index = messageRowIndex().get(id)
+    props.setRevealMessage?.((id, partID) => {
+      const index = (partID ? partRowIndex().get(partID) : undefined) ?? messageRowIndex().get(id)
       if (index === undefined) return
       virtualizer.scrollToIndex(index, { align: "center" })
     })
@@ -1049,11 +1056,17 @@ export function MessageTimeline(props: {
       const row = input.row()
       return row._tag === "AssistantPart" && row.previousAssistantPart
     }
+    // Lets find-in-session locate the rendered element of a single assistant part.
+    const partID = () => {
+      const row = input.row()
+      return row._tag === "AssistantPart" && row.group.type === "part" ? row.group.ref.partID : undefined
+    }
 
     return (
       <div
         id={anchor() ? props.anchor(input.row().userMessageID) : undefined}
         data-message-id={input.row().userMessageID}
+        data-part-id={partID()}
         data-timeline-row={input.row()._tag}
         classList={{
           "min-w-0 w-full max-w-full": true,

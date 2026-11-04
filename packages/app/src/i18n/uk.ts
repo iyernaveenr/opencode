@@ -135,6 +135,7 @@ export const dict = {
   "command.session.previous.unseen": "Попередня непрочитана сесія",
   "command.session.next.unseen": "Наступна непрочитана сесія",
   "command.session.archive": "Архівувати сесію",
+  "command.session.find": "Пошук у сесії",
 
   "command.palette": "Палітра команд",
 
@@ -822,6 +823,12 @@ export const dict = {
   "session.followupDock.summary.many": "{{count}} повідомлень у черзі",
   "session.followupDock.summary.other": "{{count}} повідомлень у черзі",
   "session.followupDock.sendNow": "Надіслати зараз",
+  "session.find.placeholder": "Пошук у сесії",
+  "session.find.count": "{{current}} з {{total}}",
+  "session.find.none": "Збігів немає",
+  "session.find.previous": "Попередній збіг",
+  "session.find.next": "Наступний збіг",
+  "session.find.loadOlder": "Завантажити давніші повідомлення",
   "session.followupDock.edit": "Редагувати",
   "session.followupDock.collapse": "Згорнути повідомлення в черзі",
   "session.followupDock.expand": "Розгорнути повідомлення в черзі",

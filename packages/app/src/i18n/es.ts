@@ -135,6 +135,7 @@ export const dict = {
   "command.session.previous.unseen": "Sesión no leída anterior",
   "command.session.next.unseen": "Siguiente sesión no leída",
   "command.session.archive": "Archivar sesión",
+  "command.session.find": "Buscar en la sesión",
 
   "command.palette": "Paleta de comandos",
 
@@ -795,6 +796,12 @@ export const dict = {
   "session.followupDock.summary.many": "{{count}} de mensajes en cola",
   "session.followupDock.summary.other": "{{count}} mensajes en cola",
   "session.followupDock.sendNow": "Enviar ahora",
+  "session.find.placeholder": "Buscar en la sesión",
+  "session.find.count": "{{current}} de {{total}}",
+  "session.find.none": "Sin coincidencias",
+  "session.find.previous": "Coincidencia anterior",
+  "session.find.next": "Coincidencia siguiente",
+  "session.find.loadOlder": "Cargar mensajes anteriores",
   "session.followupDock.edit": "Editar",
   "session.followupDock.collapse": "Contraer mensajes en cola",
   "session.followupDock.expand": "Expandir mensajes en cola",

@@ -139,6 +139,7 @@ export const dict = {
   "command.session.previous.unseen": "Önceki okunmamış oturum",
   "command.session.next.unseen": "Sonraki okunmamış oturum",
   "command.session.archive": "Oturumu arşivle",
+  "command.session.find": "Oturumda ara",
 
   "command.palette": "Komut paleti",
 
@@ -794,6 +795,12 @@ export const dict = {
   "session.followupDock.summary.one": "{{count}} sıradaki mesaj",
   "session.followupDock.summary.other": "{{count}} sıradaki mesaj",
   "session.followupDock.sendNow": "Şimdi gönder",
+  "session.find.placeholder": "Oturumda ara",
+  "session.find.count": "{{current}} / {{total}}",
+  "session.find.none": "Eşleşme yok",
+  "session.find.previous": "Önceki eşleşme",
+  "session.find.next": "Sonraki eşleşme",
+  "session.find.loadOlder": "Önceki mesajları yükle",
   "session.followupDock.edit": "Düzenle",
   "session.followupDock.collapse": "Sıradaki mesajları daralt",
   "session.followupDock.expand": "Sıradaki mesajları genişlet",

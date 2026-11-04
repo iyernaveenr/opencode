@@ -134,6 +134,7 @@ export const dict = {
   "command.session.previous.unseen": "Предыдущая непрочитанная сессия",
   "command.session.next.unseen": "Следующая непрочитанная сессия",
   "command.session.archive": "Архивировать сессию",
+  "command.session.find": "Поиск в сессии",
 
   "command.palette": "Палитра команд",
 
@@ -791,6 +792,12 @@ export const dict = {
   "session.followupDock.summary.many": "{{count}} сообщений в очереди",
   "session.followupDock.summary.other": "Сообщений в очереди: {{count}}",
   "session.followupDock.sendNow": "Отправить сейчас",
+  "session.find.placeholder": "Поиск в сессии",
+  "session.find.count": "{{current}} из {{total}}",
+  "session.find.none": "Совпадений нет",
+  "session.find.previous": "Предыдущее совпадение",
+  "session.find.next": "Следующее совпадение",
+  "session.find.loadOlder": "Загрузить более ранние сообщения",
   "session.followupDock.edit": "Редактировать",
   "session.followupDock.collapse": "Свернуть сообщения в очереди",
   "session.followupDock.expand": "Развернуть сообщения в очереди",

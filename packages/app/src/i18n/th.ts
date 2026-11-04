@@ -133,6 +133,7 @@ export const dict = {
   "command.session.previous.unseen": "เซสชันที่ยังไม่ได้อ่านก่อนหน้า",
   "command.session.next.unseen": "เซสชันที่ยังไม่ได้อ่านถัดไป",
   "command.session.archive": "จัดเก็บเซสชัน",
+  "command.session.find": "ค้นหาในเซสชัน",
 
   "command.palette": "ชุดคำสั่ง",
 
@@ -781,6 +782,12 @@ export const dict = {
   "session.followupDock.summary.one": "{{count}} ข้อความในคิว",
   "session.followupDock.summary.other": "{{count}} ข้อความในคิว",
   "session.followupDock.sendNow": "ส่งทันที",
+  "session.find.placeholder": "ค้นหาในเซสชัน",
+  "session.find.count": "{{current}} จาก {{total}}",
+  "session.find.none": "ไม่พบรายการที่ตรงกัน",
+  "session.find.previous": "รายการก่อนหน้า",
+  "session.find.next": "รายการถัดไป",
+  "session.find.loadOlder": "โหลดข้อความก่อนหน้า",
   "session.followupDock.edit": "แก้ไข",
   "session.followupDock.collapse": "ย่อข้อความในคิว",
   "session.followupDock.expand": "ขยายข้อความในคิว",

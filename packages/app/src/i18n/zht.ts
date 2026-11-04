@@ -137,6 +137,7 @@ export const dict = {
   "command.session.previous.unseen": "上一個未讀工作階段",
   "command.session.next.unseen": "下一個未讀工作階段",
   "command.session.archive": "封存工作階段",
+  "command.session.find": "在工作階段中尋找",
 
   "command.palette": "命令面板",
 
@@ -775,6 +776,12 @@ export const dict = {
   "session.followupDock.summary.one": "{{count}} 則佇列訊息",
   "session.followupDock.summary.other": "{{count}} 則佇列訊息",
   "session.followupDock.sendNow": "立即傳送",
+  "session.find.placeholder": "在工作階段中尋找",
+  "session.find.count": "第 {{current}} 項，共 {{total}} 項",
+  "session.find.none": "沒有相符項目",
+  "session.find.previous": "上一個相符項目",
+  "session.find.next": "下一個相符項目",
+  "session.find.loadOlder": "載入更早的訊息",
   "session.followupDock.edit": "編輯",
   "session.followupDock.collapse": "收合佇列訊息",
   "session.followupDock.expand": "展開佇列訊息",

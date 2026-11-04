@@ -25,6 +25,15 @@
 }
 
 @layer components {
+  /* Find in session (CSS Custom Highlight API); only color properties apply here. */
+  ::highlight(oc-find) {
+    background-color: rgba(255, 213, 0, 0.35);
+  }
+
+  ::highlight(oc-find-active) {
+    background-color: rgba(255, 150, 0, 0.7);
+  }
+
   [data-component="getting-started"] {
     container-type: inline-size;
     container-name: getting-started;

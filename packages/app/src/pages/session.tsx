@@ -94,6 +94,8 @@ import { TerminalPanelV2 } from "@/pages/session/terminal-panel-v2"
 import { useComposerCommands } from "@/pages/session/use-composer-commands"
 import { useSessionCommands } from "@/pages/session/use-session-commands"
 import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
+import { createSessionFindController } from "@/pages/session/find/session-find-controller"
+import { SessionFindBar } from "@/pages/session/find/session-find-bar"
 import { Identifier } from "@/utils/id"
 import { diffs as list } from "@/utils/diffs"
 import { Persist, persisted } from "@/utils/persist"
@@ -871,7 +873,7 @@ export default function Page() {
   let dockHeight = 0
   let scroller: HTMLDivElement | undefined
   let content: HTMLDivElement | undefined
-  let revealMessage = (_id: string) => {}
+  let revealMessage = (_id: string, _partID?: string) => {}
   let scrollToEnd = () => {}
   let scrollMark = 0
   let messageMark = 0
@@ -2058,13 +2060,30 @@ export default function Page() {
     return <SessionErrorFallback error={error} sessionID={params.id} />
   }
 
+  const find = createSessionFindController({
+    sessionID: () => params.id,
+    userMessages: visibleUserMessages,
+    messages,
+    parts: (id) => sync().data.part[id] ?? [],
+    reasoning: () => settings.general.showReasoningSummaries(),
+    scroller: () => scroller,
+    revealMessage: (id, partID) => revealMessage(id, partID),
+    cursor,
+    history: { more: historyMore, loading: historyLoading, loadOlder },
+    pauseAutoScroll: () => autoScroll.pause(),
+    onClose: () => inputRef?.focus(),
+  })
+
   const sessionPanelContent = () => (
     <>
       {sessionSync() ?? ""}
       <Show when={!isDesktop() && !!params.id && settings.general.newLayoutDesigns() && !mobileTabsBottom()}>
         {mobileTabs(true)}
       </Show>
-      <div class="flex-1 min-h-0 overflow-hidden">
+      <div class="relative flex-1 min-h-0 overflow-hidden">
+        <Show when={params.id && !mobileChanges()}>
+          <SessionFindBar controller={find} more={historyMore()} />
+        </Show>
         <Switch>
           <Match when={params.id && mobileChanges()}>
             <div class="relative h-full overflow-hidden">

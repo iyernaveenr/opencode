@@ -134,6 +134,7 @@ export const dict = {
   "command.session.previous.unseen": "Forrige uleste sesjon",
   "command.session.next.unseen": "Neste uleste sesjon",
   "command.session.archive": "Arkiver sesjon",
+  "command.session.find": "Søk i økten",
 
   "command.palette": "Kommandopalett",
 
@@ -664,6 +665,12 @@ export const dict = {
   "session.followupDock.summary.one": "{{count}} melding i kø",
   "session.followupDock.summary.other": "{{count}} meldinger i kø",
   "session.followupDock.sendNow": "Send nå",
+  "session.find.placeholder": "Søk i økten",
+  "session.find.count": "{{current}} av {{total}}",
+  "session.find.none": "Ingen treff",
+  "session.find.previous": "Forrige treff",
+  "session.find.next": "Neste treff",
+  "session.find.loadOlder": "Last inn eldre meldinger",
   "session.followupDock.edit": "Rediger",
   "session.followupDock.collapse": "Skjul meldinger i kø",
   "session.followupDock.expand": "Utvid meldinger i kø",

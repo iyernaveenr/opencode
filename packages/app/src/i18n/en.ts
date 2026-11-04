@@ -38,6 +38,7 @@ export const dict = {
   "command.session.previous.unseen": "Previous unread session",
   "command.session.next.unseen": "Next unread session",
   "command.session.archive": "Archive session",
+  "command.session.find": "Find in session",
 
   "command.palette": "Command palette",
 
@@ -713,6 +714,12 @@ export const dict = {
   "session.followupDock.summary.one": "{{count}} queued message",
   "session.followupDock.summary.other": "{{count}} queued messages",
   "session.followupDock.sendNow": "Send now",
+  "session.find.placeholder": "Find in session",
+  "session.find.count": "{{current}} of {{total}}",
+  "session.find.none": "No matches",
+  "session.find.previous": "Previous match",
+  "session.find.next": "Next match",
+  "session.find.loadOlder": "Load earlier messages",
   "session.followupDock.edit": "Edit",
   "session.followupDock.collapse": "Collapse queued messages",
   "session.followupDock.expand": "Expand queued messages",
